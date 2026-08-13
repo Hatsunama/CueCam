@@ -22,6 +22,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import {
   Alert,
+  AppState,
   KeyboardAvoidingView,
   LayoutChangeEvent,
   Pressable,
@@ -123,13 +124,63 @@ function fitFrameToScreen(frame: FrameRect, screenWidth: number, screenHeight: n
   };
 }
 
-function readStored<T>(key: string, fallback: T): T {
+function finiteNumber(value: unknown, fallback: number, minimum: number, maximum: number) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? clamp(value, minimum, maximum)
+    : fallback;
+}
+
+function sanitizeSettings(value: unknown): StoredSettings {
+  const candidate = value && typeof value === 'object' ? value as Partial<StoredSettings> : {};
+  return {
+    fontSize: finiteNumber(candidate.fontSize, DEFAULT_SETTINGS.fontSize, 24, 68),
+    speed: finiteNumber(candidate.speed, DEFAULT_SETTINGS.speed, 10, 92),
+    countdown: candidate.countdown === 0 || candidate.countdown === 3 || candidate.countdown === 5
+      ? candidate.countdown
+      : DEFAULT_SETTINGS.countdown,
+    overlayOpacity: finiteNumber(candidate.overlayOpacity, DEFAULT_SETTINGS.overlayOpacity, 0.2, 0.9),
+    mirrorText: typeof candidate.mirrorText === 'boolean'
+      ? candidate.mirrorText
+      : DEFAULT_SETTINGS.mirrorText,
+  };
+}
+
+function sanitizeFrame(value: unknown): FrameRect | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const candidate = value as Partial<FrameRect>;
+  if (
+    !Number.isFinite(candidate.x) ||
+    !Number.isFinite(candidate.y) ||
+    !Number.isFinite(candidate.width) ||
+    !Number.isFinite(candidate.height)
+  ) return undefined;
+  return candidate as FrameRect;
+}
+
+function sanitizeFrames(value: unknown): StoredFrames {
+  if (!value || typeof value !== 'object') return {};
+  const candidate = value as StoredFrames;
+  const portrait = sanitizeFrame(candidate.portrait);
+  const landscape = sanitizeFrame(candidate.landscape);
+  return {
+    ...(portrait ? { portrait } : {}),
+    ...(landscape ? { landscape } : {}),
+  };
+}
+
+function readStored<T>(key: string, fallback: T, sanitize: (value: unknown) => T): T {
   try {
     const value = globalThis.localStorage?.getItem(key);
-    return value ? (JSON.parse(value) as T) : fallback;
+    return value ? sanitize(JSON.parse(value)) : fallback;
   } catch {
     return fallback;
   }
+}
+
+function writeStored(key: string, value: unknown) {
+  try {
+    globalThis.localStorage?.setItem(key, JSON.stringify(value));
+  } catch {}
 }
 
 function IconButton({
@@ -148,6 +199,7 @@ function IconButton({
   return (
     <Pressable
       accessibilityLabel={label}
+      accessibilityRole="button"
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
@@ -214,7 +266,16 @@ async function lockCurrentOrientation() {
     [ScreenOrientation.Orientation.LANDSCAPE_LEFT]: ScreenOrientation.OrientationLock.LANDSCAPE_LEFT,
     [ScreenOrientation.Orientation.LANDSCAPE_RIGHT]: ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT,
   };
-  await ScreenOrientation.lockAsync(locks[orientation] ?? ScreenOrientation.OrientationLock.DEFAULT);
+  const preferredLock = locks[orientation] ?? ScreenOrientation.OrientationLock.DEFAULT;
+  if (await ScreenOrientation.supportsOrientationLockAsync(preferredLock)) {
+    await ScreenOrientation.lockAsync(preferredLock);
+    return;
+  }
+  const fallbackLock = orientation === ScreenOrientation.Orientation.LANDSCAPE_LEFT ||
+    orientation === ScreenOrientation.Orientation.LANDSCAPE_RIGHT
+    ? ScreenOrientation.OrientationLock.LANDSCAPE
+    : ScreenOrientation.OrientationLock.PORTRAIT_UP;
+  await ScreenOrientation.lockAsync(fallbackLock);
 }
 
 export function TeleprompterScreen() {
@@ -230,7 +291,12 @@ export function TeleprompterScreen() {
   const viewportHeightRef = useRef(0);
   const recordingSessionActiveRef = useRef(false);
   const recordingSegmentActiveRef = useRef(false);
+  const recordingStartPendingRef = useRef(false);
   const resumeAfterCameraReadyRef = useRef(false);
+  const mountedRef = useRef(true);
+  const countdownRunRef = useRef(0);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const frameX = useSharedValue(0);
   const frameY = useSharedValue(0);
   const frameWidth = useSharedValue(0);
@@ -247,14 +313,16 @@ export function TeleprompterScreen() {
   const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
   const [cameraReady, setCameraReady] = useState(false);
   const [facing, setFacing] = useState<CameraType>('front');
-  const [script, setScript] = useState(() =>
-    readStored('cuecam.script', DEFAULT_SCRIPT).slice(0, SCRIPT_CHARACTER_LIMIT),
-  );
+  const [script, setScript] = useState(() => readStored(
+    'cuecam.script',
+    DEFAULT_SCRIPT,
+    (value) => typeof value === 'string' ? value.slice(0, SCRIPT_CHARACTER_LIMIT) : DEFAULT_SCRIPT,
+  ));
   const [settings, setSettings] = useState<StoredSettings>(() =>
-    readStored('cuecam.settings', DEFAULT_SETTINGS),
+    readStored('cuecam.settings', DEFAULT_SETTINGS, sanitizeSettings),
   );
   const [storedFrames, setStoredFrames] = useState<StoredFrames>(() =>
-    readStored('cuecam.promptFrames', {}),
+    readStored('cuecam.promptFrames', {}, sanitizeFrames),
   );
   const [setupOpen, setSetupOpen] = useState(true);
   const [frameEditing, setFrameEditing] = useState(false);
@@ -280,17 +348,50 @@ export function TeleprompterScreen() {
   const scriptWords = useMemo(() => script.trim().split(/\s+/).filter(Boolean).length, [script]);
   const estimatedMinutes = Math.max(1, Math.ceil(scriptWords / Math.max(estimatedWpm, 1)));
 
+  const stopActiveCameraRecording = useCallback(() => {
+    cameraRef.current?.stopRecording();
+  }, []);
+
   useEffect(() => {
-    globalThis.localStorage?.setItem('cuecam.script', JSON.stringify(script));
+    writeStored('cuecam.script', script);
   }, [script]);
 
   useEffect(() => {
-    globalThis.localStorage?.setItem('cuecam.settings', JSON.stringify(settings));
+    writeStored('cuecam.settings', settings);
   }, [settings]);
 
   useEffect(() => {
-    globalThis.localStorage?.setItem('cuecam.promptFrames', JSON.stringify(storedFrames));
+    writeStored('cuecam.promptFrames', storedFrames);
   }, [storedFrames]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') return;
+      countdownRunRef.current += 1;
+      setCountdownValue(null);
+      if (!recordingSessionActiveRef.current) return;
+      recordingSessionActiveRef.current = false;
+      resumeAfterCameraReadyRef.current = false;
+      cameraRef.current?.stopRecording();
+    });
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      countdownRunRef.current += 1;
+      recordingSessionActiveRef.current = false;
+      recordingStartPendingRef.current = false;
+      resumeAfterCameraReadyRef.current = false;
+      stopActiveCameraRecording();
+      ScreenOrientation.unlockAsync().catch(() => undefined);
+      KeepAwake.deactivateKeepAwake('cuecam-session').catch(() => undefined);
+      if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
+      if (toastTimeoutRef.current !== null) clearTimeout(toastTimeoutRef.current);
+    };
+  }, [stopActiveCameraRecording]);
 
   useEffect(() => {
     frameX.value = promptFrame.x;
@@ -543,27 +644,39 @@ export function TeleprompterScreen() {
     return microphone.granted;
   };
 
-  const saveRecording = async (uri: string) => {
+  const saveRecording = useCallback(async (uri: string) => {
     try {
       const permission = await MediaLibrary.requestPermissionsAsync(true, ['video']);
       if (!permission.granted) {
-        Alert.alert('Video is in CueCam', 'Gallery access was not granted, so this clip could not be copied to your normal video folder.');
+        if (mountedRef.current) {
+          Alert.alert('Video is in CueCam', 'Gallery access was not granted, so this clip could not be copied to your normal video folder.');
+        }
         return;
       }
-      const asset = await MediaLibrary.Asset.create(uri);
-      const savedUri = await asset.getUri();
-      if (!savedUri) throw new Error('The phone did not return a saved video location.');
+      await MediaLibrary.Asset.create(uri);
+      if (!mountedRef.current) return;
       setSavedNotice(true);
-      setTimeout(() => setSavedNotice(false), 2800);
+      if (toastTimeoutRef.current !== null) clearTimeout(toastTimeoutRef.current);
+      toastTimeoutRef.current = setTimeout(() => {
+        if (mountedRef.current) setSavedNotice(false);
+      }, 2800);
     } catch (error) {
-      Alert.alert('Could not save video', error instanceof Error ? error.message : 'Please try again.');
+      if (mountedRef.current) {
+        Alert.alert('Could not save video', error instanceof Error ? error.message : 'Please try again.');
+      }
     }
-  };
+  }, []);
+
+  const queueRecordingSave = useCallback((uri: string) => {
+    const nextSave = saveQueueRef.current.then(() => saveRecording(uri));
+    saveQueueRef.current = nextSave.catch(() => undefined);
+  }, [saveRecording]);
 
   const finishRecordingSession = useCallback(() => {
     recordingSessionActiveRef.current = false;
     resumeAfterCameraReadyRef.current = false;
     ScreenOrientation.unlockAsync().catch(() => undefined);
+    if (!mountedRef.current) return;
     setIsSwitchingCamera(false);
     setIsRecording(false);
     setIsScrolling(false);
@@ -574,10 +687,16 @@ export function TeleprompterScreen() {
     recordingSegmentActiveRef.current = true;
 
     try {
-      const recording = await cameraRef.current?.recordAsync({ maxDuration: 60 * 60 });
-      if (recording?.uri) void saveRecording(recording.uri);
+      const camera = cameraRef.current;
+      if (!camera) throw new Error('The camera is not ready.');
+      const recording = await camera.recordAsync({ maxDuration: 60 * 60 });
+      if (recording?.uri) queueRecordingSave(recording.uri);
     } catch (error) {
-      if (recordingSessionActiveRef.current && !resumeAfterCameraReadyRef.current) {
+      if (
+        mountedRef.current &&
+        recordingSessionActiveRef.current &&
+        !resumeAfterCameraReadyRef.current
+      ) {
         Alert.alert('Recording stopped', error instanceof Error ? error.message : 'The camera could not continue recording.');
         recordingSessionActiveRef.current = false;
       }
@@ -587,8 +706,10 @@ export function TeleprompterScreen() {
       if (!recordingSessionActiveRef.current) {
         finishRecordingSession();
       } else if (resumeAfterCameraReadyRef.current) {
-        setCameraReady(false);
-        setFacing((value) => (value === 'front' ? 'back' : 'front'));
+        if (mountedRef.current) {
+          setCameraReady(false);
+          setFacing((value) => (value === 'front' ? 'back' : 'front'));
+        }
       } else {
         finishRecordingSession();
       }
@@ -619,32 +740,64 @@ export function TeleprompterScreen() {
   };
 
   const beginRecording = async () => {
-    if (!cameraReady || !script.trim()) return;
-    const granted = await ensurePermissions();
-    if (!granted) {
-      Alert.alert('Permissions needed', 'CueCam needs camera and microphone access to record your video.');
-      return;
-    }
+    if (
+      !cameraReady ||
+      !script.trim() ||
+      countdownValue !== null ||
+      recordingStartPendingRef.current ||
+      recordingSessionActiveRef.current
+    ) return;
+    try {
+      recordingStartPendingRef.current = true;
+      const granted = await ensurePermissions();
+      if (!mountedRef.current || AppState.currentState !== 'active') return;
+      if (!granted) {
+        Alert.alert('Permissions needed', 'CueCam needs camera and microphone access to record your video.');
+        return;
+      }
 
-    setSetupOpen(false);
-    setFrameEditing(false);
-    setRecordingSeconds(0);
-    resetPrompt();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
+      setSetupOpen(false);
+      setFrameEditing(false);
+      setRecordingSeconds(0);
+      resetPrompt();
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
 
-    for (let number = settings.countdown; number > 0; number -= 1) {
-      setCountdownValue(number);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const countdownRun = ++countdownRunRef.current;
+      for (let number = settings.countdown; number > 0; number -= 1) {
+        setCountdownValue(number);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        if (
+          !mountedRef.current ||
+          AppState.currentState !== 'active' ||
+          countdownRunRef.current !== countdownRun
+        ) return;
+      }
+      setCountdownValue(null);
+      try {
+        await lockCurrentOrientation();
+      } catch (error) {
+        Alert.alert(
+          'Could not lock orientation',
+          error instanceof Error ? error.message : 'Recording did not start. Please try again.',
+        );
+        return;
+      }
+      if (!mountedRef.current || AppState.currentState !== 'active' || !cameraRef.current) {
+        ScreenOrientation.unlockAsync().catch(() => undefined);
+        return;
+      }
+      recordingSessionActiveRef.current = true;
+      setIsRecording(true);
+      setIsScrolling(true);
+      void recordCameraSegment();
+    } finally {
+      recordingStartPendingRef.current = false;
     }
-    setCountdownValue(null);
-    await lockCurrentOrientation();
-    recordingSessionActiveRef.current = true;
-    setIsRecording(true);
-    setIsScrolling(true);
-    void recordCameraSegment();
   };
 
   const stopRecording = () => {
+    countdownRunRef.current += 1;
+    setCountdownValue(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
     recordingSessionActiveRef.current = false;
     resumeAfterCameraReadyRef.current = false;
@@ -672,6 +825,13 @@ export function TeleprompterScreen() {
       maximumOffset > 0 ? clamp(offsetRef.current / maximumOffset, 0, 1) : 0;
   };
 
+  const handleCameraMountError = ({ message }: { message: string }) => {
+    recordingSessionActiveRef.current = false;
+    resumeAfterCameraReadyRef.current = false;
+    finishRecordingSession();
+    Alert.alert('Camera unavailable', message);
+  };
+
   if (!cameraPermission || !microphonePermission) {
     return <View style={styles.loadingScreen} />;
   }
@@ -689,7 +849,7 @@ export function TeleprompterScreen() {
           mirror={facing === 'front'}
           mode="video"
           onCameraReady={handleCameraReady}
-          onMountError={({ message }) => Alert.alert('Camera unavailable', message)}
+          onMountError={handleCameraMountError}
         />
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.cameraPlaceholder]} />
@@ -843,11 +1003,12 @@ export function TeleprompterScreen() {
         <IconButton label="Restart" symbol="↺" onPress={resetPrompt} />
         <Pressable
           accessibilityLabel={isRecording ? 'Stop recording' : 'Start recording'}
+          accessibilityRole="button"
           disabled={!cameraReady || countdownValue !== null || missingPermissions}
           onPress={isRecording ? stopRecording : beginRecording}
           style={({ pressed }) => [
             styles.recordOuter,
-            (!cameraReady || missingPermissions) && styles.disabled,
+            (!cameraReady || countdownValue !== null || missingPermissions) && styles.disabled,
             pressed && styles.pressed,
           ]}>
           <View style={[styles.recordInner, isRecording && styles.recordInnerStop]} />
@@ -904,7 +1065,7 @@ export function TeleprompterScreen() {
                   {script.length.toLocaleString()} / {SCRIPT_CHARACTER_LIMIT.toLocaleString()} chars
                 </Text>
                 <Text style={styles.metaText}>about {estimatedMinutes} min</Text>
-                <Pressable onPress={() => setScript('')}>
+                <Pressable accessibilityLabel="Clear script" accessibilityRole="button" onPress={() => setScript('')}>
                   <Text style={styles.clearText}>Clear</Text>
                 </Pressable>
               </View>

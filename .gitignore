@@ -1,4 +1,6 @@
 node_modules/
+.claude/
+.vscode/
 
 .expo/
 dist/
@@ -25,8 +27,6 @@ yarn-error.*
 .env*.local
 
 *.tsbuildinfo
-
-example
 
 /ios
 /android

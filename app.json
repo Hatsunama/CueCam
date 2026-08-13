@@ -2,7 +2,8 @@
   "expo": {
     "name": "CueCam",
     "slug": "cuecam",
-    "version": "1.0.4",
+    "version": "1.0.5",
+    "platforms": ["ios", "android"],
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "cuecam",
@@ -10,14 +11,26 @@
     "ios": {
       "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.thea.cuecam",
-      "buildNumber": "5",
+      "buildNumber": "6",
+      "requireFullScreen": true,
       "infoPlist": {
         "NSPhotoLibraryAddUsageDescription": "CueCam saves your recorded videos to Photos."
+      },
+      "privacyManifests": {
+        "NSPrivacyTracking": false,
+        "NSPrivacyCollectedDataTypes": []
       }
     },
     "android": {
       "package": "com.thea.cuecam",
-      "versionCode": 5,
+      "versionCode": 6,
+      "allowBackup": false,
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#06152A",
         "foregroundImage": "./assets/images/icon.png"
@@ -58,10 +71,6 @@
         }
       ],
       "expo-sqlite"
-    ],
-    "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
-    }
+    ]
   }
 }
