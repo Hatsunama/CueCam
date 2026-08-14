@@ -35,6 +35,7 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "install:android:release": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File scripts/install-android-release.ps1",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "doctor": "npx expo-doctor",

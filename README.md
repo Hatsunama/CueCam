@@ -40,3 +40,9 @@ Before a release, run:
 ```bash
 npm run check
 ```
+
+To build a clean arm64 release from committed source and install it on one connected Android phone:
+
+```powershell
+npm run install:android:release
+```
