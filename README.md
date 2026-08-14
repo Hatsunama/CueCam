@@ -6,12 +6,13 @@ CueCam is a phone-first teleprompter and video recorder built with Expo 57 and R
 
 The simplest installation uses only the phone:
 
-1. Open the [latest CueCam release](https://github.com/Hatsunama/CueCam/releases/latest) in the phone's web browser.
-2. Expand **Assets** and tap `cuecam-1.0.7-arm64-v8a-release.apk`.
-3. Open the downloaded APK.
-4. If Android blocks the installation, tap **Settings**, enable **Allow from this source** for the browser, then return to the installer.
-5. Tap **Install**, then **Open**.
-6. Allow camera and microphone access when CueCam requests them. Allow video-saving access if Android displays that request after the first recording.
+1. Tap **[Download CueCam 1.0.7 for Android](https://github.com/Hatsunama/CueCam/releases/download/v1.0.7/cuecam-1.0.7-arm64-v8a-release.apk)** in the phone's web browser.
+2. Open the downloaded APK.
+3. If Android blocks the installation, tap **Settings**, enable **Allow from this source** for the browser, then return to the installer. On Android 7, enable **Unknown sources** under **Settings > Security** instead.
+4. Tap **Install**, then **Open**.
+5. Allow camera and microphone access when CueCam requests them. Allow video-saving access if Android displays that request after the first recording.
+
+The APK and checksum are also available on the [latest CueCam release page](https://github.com/Hatsunama/CueCam/releases/latest).
 
 The downloadable build requires Android 7.0 or newer and a 64-bit ARM (`arm64-v8a`) phone. It is not an iPhone package. CueCam does not currently have a public App Store or TestFlight release.
 
@@ -56,7 +57,7 @@ Approve the phone's debugging prompt if it appears after `adb devices`, then run
 
 This method downloads and verifies CueCam from a Termux shell, but Android still displays its normal installation confirmation.
 
-1. In Android settings, open **Apps > Special app access > Install unknown apps > Termux** and enable **Allow from this source**. The exact menu name varies by phone manufacturer.
+1. In Android settings, open **Apps > Special app access > Install unknown apps > Termux** and enable **Allow from this source**. On Android 7, enable **Unknown sources** under **Settings > Security** instead. The exact menu name varies by phone manufacturer.
 2. In Termux, run:
 
 ```sh
