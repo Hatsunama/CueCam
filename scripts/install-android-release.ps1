@@ -20,6 +20,27 @@ function Invoke-Checked {
     }
 }
 
+function Get-Sha256 {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $algorithm = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            return -join ($algorithm.ComputeHash($stream) | ForEach-Object { $_.ToString('X2') })
+        }
+        finally {
+            $algorithm.Dispose()
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $packageName = 'com.thea.cuecam'
 $stageRoot = Join-Path "$env:SystemDrive\" "CueCamBuild-$PID"
@@ -115,7 +136,7 @@ try {
         }
 
         Invoke-Checked -Command $apksigner -Arguments @('verify', '--verbose', '--print-certs', $apkPath)
-        $apkHash = (Get-FileHash -Algorithm SHA256 $apkPath).Hash
+        $apkHash = Get-Sha256 -Path $apkPath
         $appVersion = (Get-Content '.\package.json' -Raw | ConvertFrom-Json).version
         $artifactDirectory = Join-Path $projectRoot 'builds'
         New-Item -ItemType Directory -Path $artifactDirectory -Force | Out-Null
