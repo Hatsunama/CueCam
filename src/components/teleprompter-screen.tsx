@@ -289,6 +289,8 @@ export function TeleprompterScreen() {
   const offsetRef = useRef(0);
   const contentHeightRef = useRef(0);
   const viewportHeightRef = useRef(0);
+  const manualScrollActiveRef = useRef(false);
+  const manualScrollEndTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recordingSessionActiveRef = useRef(false);
   const recordingSegmentActiveRef = useRef(false);
   const recordingStartPendingRef = useRef(false);
@@ -389,6 +391,9 @@ export function TeleprompterScreen() {
       ScreenOrientation.unlockAsync().catch(() => undefined);
       KeepAwake.deactivateKeepAwake('cuecam-session').catch(() => undefined);
       if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
+      if (manualScrollEndTimeoutRef.current !== null) {
+        clearTimeout(manualScrollEndTimeoutRef.current);
+      }
       if (toastTimeoutRef.current !== null) clearTimeout(toastTimeoutRef.current);
     };
   }, [stopActiveCameraRecording]);
@@ -596,6 +601,11 @@ export function TeleprompterScreen() {
     }
 
     const tick = (now: number) => {
+      if (manualScrollActiveRef.current) {
+        lastFrameRef.current = now;
+        animationFrameRef.current = requestAnimationFrame(tick);
+        return;
+      }
       const previous = lastFrameRef.current ?? now;
       lastFrameRef.current = now;
       const maximumOffset = Math.max(0, contentHeightRef.current - viewportHeightRef.current);
@@ -620,12 +630,46 @@ export function TeleprompterScreen() {
   }, []);
 
   const resetPrompt = useCallback(() => {
+    manualScrollActiveRef.current = false;
+    if (manualScrollEndTimeoutRef.current !== null) {
+      clearTimeout(manualScrollEndTimeoutRef.current);
+      manualScrollEndTimeoutRef.current = null;
+    }
     offsetRef.current = 0;
     scrollProgress.value = 0;
     promptRef.current?.scrollTo({ y: 0, animated: true });
     setIsScrolling(false);
     Haptics.selectionAsync().catch(() => undefined);
   }, [scrollProgress]);
+
+  const beginManualScroll = useCallback(() => {
+    if (manualScrollEndTimeoutRef.current !== null) {
+      clearTimeout(manualScrollEndTimeoutRef.current);
+      manualScrollEndTimeoutRef.current = null;
+    }
+    manualScrollActiveRef.current = true;
+    lastFrameRef.current = null;
+  }, []);
+
+  const finishManualScroll = useCallback(() => {
+    if (manualScrollEndTimeoutRef.current !== null) {
+      clearTimeout(manualScrollEndTimeoutRef.current);
+      manualScrollEndTimeoutRef.current = null;
+    }
+    manualScrollActiveRef.current = false;
+    lastFrameRef.current = null;
+  }, []);
+
+  const scheduleManualScrollFinish = useCallback(() => {
+    if (manualScrollEndTimeoutRef.current !== null) {
+      clearTimeout(manualScrollEndTimeoutRef.current);
+    }
+    manualScrollEndTimeoutRef.current = setTimeout(() => {
+      manualScrollEndTimeoutRef.current = null;
+      manualScrollActiveRef.current = false;
+      lastFrameRef.current = null;
+    }, 120);
+  }, []);
 
   const toggleFrameEditing = () => {
     if (isRecording || countdownValue !== null) return;
@@ -749,6 +793,7 @@ export function TeleprompterScreen() {
     ) return;
     try {
       recordingStartPendingRef.current = true;
+      setIsScrolling(false);
       const granted = await ensurePermissions();
       if (!mountedRef.current || AppState.currentState !== 'active') return;
       if (!granted) {
@@ -759,7 +804,6 @@ export function TeleprompterScreen() {
       setSetupOpen(false);
       setFrameEditing(false);
       setRecordingSeconds(0);
-      resetPrompt();
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
 
       const countdownRun = ++countdownRunRef.current;
@@ -896,13 +940,21 @@ export function TeleprompterScreen() {
             ref={promptRef}
             contentInsetAdjustmentBehavior="never"
             showsVerticalScrollIndicator={false}
-            scrollEnabled={!isScrolling && !frameEditing}
+            scrollEnabled={!frameEditing}
+            onScrollBeginDrag={beginManualScroll}
+            onScrollEndDrag={scheduleManualScrollFinish}
+            onMomentumScrollBegin={beginManualScroll}
+            onMomentumScrollEnd={finishManualScroll}
             onScroll={(event) => {
-              if (!isScrolling) {
-                offsetRef.current = event.nativeEvent.contentOffset.y;
+              if (manualScrollActiveRef.current || !isScrolling) {
                 const maximumOffset = Math.max(
                   0,
                   contentHeightRef.current - viewportHeightRef.current,
+                );
+                offsetRef.current = clamp(
+                  event.nativeEvent.contentOffset.y,
+                  0,
+                  maximumOffset,
                 );
                 scrollProgress.value =
                   maximumOffset > 0 ? clamp(offsetRef.current / maximumOffset, 0, 1) : 0;

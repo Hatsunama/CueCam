@@ -5,6 +5,8 @@ CueCam is a phone-first teleprompter and video recorder built with Expo 57 and R
 ## Features
 
 - Adjustable text size and automatic scrolling speed
+- Start recording from any manually selected place in the script
+- Drag the script up or down during recording, then automatically resume scrolling
 - Portrait and landscape layouts
 - Camera recording saved to the phone's normal media library
 - Movable and resizable prompt frame with an animated crop-style border
