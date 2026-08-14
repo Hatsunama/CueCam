@@ -2,6 +2,86 @@
 
 CueCam is a phone-first teleprompter and video recorder built with Expo 57 and React Native.
 
+## Install on an Android phone
+
+The simplest installation uses only the phone:
+
+1. Open the [latest CueCam release](https://github.com/Hatsunama/CueCam/releases/latest) in the phone's web browser.
+2. Expand **Assets** and tap `cuecam-1.0.7-arm64-v8a-release.apk`.
+3. Open the downloaded APK.
+4. If Android blocks the installation, tap **Settings**, enable **Allow from this source** for the browser, then return to the installer.
+5. Tap **Install**, then **Open**.
+6. Allow camera and microphone access when CueCam requests them. Allow video-saving access if Android displays that request after the first recording.
+
+The downloadable build requires Android 7.0 or newer and a 64-bit ARM (`arm64-v8a`) phone. It is not an iPhone package. CueCam does not currently have a public App Store or TestFlight release.
+
+Android warns about apps installed outside Google Play. You can verify this release using its SHA-256 checksum:
+
+```text
+133765CD5F31940F5B4DCF36933857163511A00B59133013B12A9840D3B3A79C
+```
+
+Installing a newer CueCam APK over the existing app normally preserves scripts and settings.
+
+## Install from a Windows PC
+
+This method is useful when browser installation is unavailable.
+
+1. Download and extract Google's [Android SDK Platform Tools](https://developer.android.com/tools/releases/platform-tools).
+2. On the phone, enable **Developer options** by tapping **Build number** seven times in **Settings > About phone**.
+3. Enable **USB debugging** in Developer options.
+4. Connect the phone by USB and approve its debugging prompt.
+5. Open PowerShell in the extracted `platform-tools` directory and run:
+
+```powershell
+$Version = '1.0.7'
+$FileName = "cuecam-$Version-arm64-v8a-release.apk"
+$Apk = Join-Path $env:TEMP $FileName
+$Url = "https://github.com/Hatsunama/CueCam/releases/download/v$Version/$FileName"
+$ExpectedHash = '133765CD5F31940F5B4DCF36933857163511A00B59133013B12A9840D3B3A79C'
+
+Invoke-WebRequest -Uri $Url -OutFile $Apk
+$ActualHash = (Get-FileHash -LiteralPath $Apk -Algorithm SHA256).Hash
+if ($ActualHash -ne $ExpectedHash) {
+    throw "Checksum mismatch. Delete $Apk and do not install it."
+}
+
+.\adb.exe devices
+.\adb.exe install -r --no-streaming $Apk
+```
+
+Approve the phone's debugging prompt if it appears after `adb devices`, then run the last two commands again. A successful installation ends with `Success`.
+
+## Install from Termux on the phone
+
+This method downloads and verifies CueCam from a Termux shell, but Android still displays its normal installation confirmation.
+
+1. In Android settings, open **Apps > Special app access > Install unknown apps > Termux** and enable **Allow from this source**. The exact menu name varies by phone manufacturer.
+2. In Termux, run:
+
+```sh
+pkg update
+pkg install curl coreutils
+
+VERSION='1.0.7'
+FILE="cuecam-$VERSION-arm64-v8a-release.apk"
+URL="https://github.com/Hatsunama/CueCam/releases/download/v$VERSION/$FILE"
+EXPECTED='133765CD5F31940F5B4DCF36933857163511A00B59133013B12A9840D3B3A79C'
+
+curl --fail --location "$URL" --output "$FILE"
+printf '%s  %s\n' "$EXPECTED" "$FILE" | sha256sum --check
+termux-open --view --content-type application/vnd.android.package-archive "$FILE"
+```
+
+3. Android's package installer opens after the checksum reports `OK`. Tap **Install**, then **Open**.
+
+## Troubleshooting installation
+
+- **App not installed:** confirm the phone uses the ARM64 architecture and runs Android 7.0 or newer.
+- **ADB shows `unauthorized`:** unlock the phone, approve the USB debugging prompt, then run `adb devices` again.
+- **`INSTALL_FAILED_UPDATE_INCOMPATIBLE`:** the installed copy was signed by a different developer key. Back up any scripts you need, uninstall the old copy, and install the release again. Uninstalling erases CueCam's locally stored scripts and settings.
+- **The installer does not open from Termux:** confirm Termux has permission to install unknown apps, then rerun the `termux-open` command.
+
 ## Features
 
 - Adjustable text size and automatic scrolling speed
@@ -22,26 +102,28 @@ CueCam has no accounts, analytics, advertising, or backend service. Scripts and 
 
 See [PRIVACY.md](PRIVACY.md) for the full privacy policy.
 
-## Run locally
+## Develop from source
 
-```bash
+Install the current Node.js LTS release and the Android development tools, then run:
+
+```sh
 npm install
 npx expo start
 ```
 
-For a native Android development build:
+For a native Android development build on a connected phone:
 
-```bash
+```sh
 npx expo run:android
 ```
 
-Before a release, run:
+Before producing a release:
 
-```bash
+```sh
 npm run check
 ```
 
-To build a clean arm64 release from committed source and install it on one connected Android phone:
+On Windows, this command creates a clean ARM64 release from committed source, verifies it, installs it on exactly one connected Android phone, and writes the APK to `builds/`:
 
 ```powershell
 npm run install:android:release
