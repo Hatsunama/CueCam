@@ -38,7 +38,14 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "doctor": "npx expo-doctor",
-    "check": "npm run lint && npm run typecheck && npm run doctor"
+    "security:build": "node scripts/verify-build-security.cjs",
+    "check": "npm run lint && npm run typecheck && npm run security:build && npm run doctor"
   },
-  "private": true
+  "private": true,
+  "license": "MIT",
+  "overrides": {
+    "xcode": {
+      "uuid": "11.1.1"
+    }
+  }
 }
