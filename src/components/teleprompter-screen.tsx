@@ -300,7 +300,6 @@ export function TeleprompterScreen() {
   const mountedRef = useRef(true);
   const countdownRunRef = useRef(0);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const frameX = useSharedValue(0);
   const frameY = useSharedValue(0);
   const frameWidth = useSharedValue(0);
@@ -733,11 +732,6 @@ export function TeleprompterScreen() {
     }
   }, []);
 
-  const queueRecordingSave = useCallback((uri: string) => {
-    const nextSave = saveQueueRef.current.then(() => saveRecording(uri));
-    saveQueueRef.current = nextSave.catch(() => undefined);
-  }, [saveRecording]);
-
   const finishRecordingSession = useCallback(() => {
     recordingSessionActiveRef.current = false;
     resumeAfterCameraReadyRef.current = false;
@@ -756,7 +750,7 @@ export function TeleprompterScreen() {
       const camera = cameraRef.current;
       if (!camera) throw new Error('The camera is not ready.');
       const recording = await camera.recordAsync({ maxDuration: 60 * 60 });
-      if (recording?.uri) queueRecordingSave(recording.uri);
+      if (recording?.uri) await saveRecording(recording.uri);
     } catch (error) {
       if (
         mountedRef.current &&

@@ -2,7 +2,7 @@
   "expo": {
     "name": "CueCam",
     "slug": "cuecam",
-    "version": "1.0.8",
+    "version": "1.0.9",
     "platforms": ["ios", "android"],
     "orientation": "default",
     "icon": "./assets/images/icon.png",
@@ -11,7 +11,7 @@
     "ios": {
       "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.thea.cuecam",
-      "buildNumber": "9",
+      "buildNumber": "10",
       "requireFullScreen": true,
       "infoPlist": {
         "NSPhotoLibraryAddUsageDescription": "CueCam saves your recorded videos to Photos."
@@ -23,7 +23,7 @@
     },
     "android": {
       "package": "com.thea.cuecam",
-      "versionCode": 9,
+      "versionCode": 10,
       "allowBackup": false,
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
