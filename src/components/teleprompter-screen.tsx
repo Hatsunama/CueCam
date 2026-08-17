@@ -23,6 +23,7 @@ import Animated, {
 import {
   Alert,
   AppState,
+  Keyboard,
   KeyboardAvoidingView,
   LayoutChangeEvent,
   Pressable,
@@ -284,6 +285,7 @@ export function TeleprompterScreen() {
   const isLandscape = width > height;
   const cameraRef = useRef<CameraView>(null);
   const promptRef = useRef<ScrollView>(null);
+  const inlineScriptInputRef = useRef<TextInput>(null);
   const animationFrameRef = useRef<number | null>(null);
   const lastFrameRef = useRef<number | null>(null);
   const offsetRef = useRef(0);
@@ -328,6 +330,7 @@ export function TeleprompterScreen() {
   );
   const [setupOpen, setSetupOpen] = useState(true);
   const [frameEditing, setFrameEditing] = useState(false);
+  const [inlineEditing, setInlineEditing] = useState(false);
   const [viewportHeight, setViewportHeight] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [isSwitchingCamera, setIsSwitchingCamera] = useState(false);
@@ -404,6 +407,12 @@ export function TeleprompterScreen() {
     frameWidth.value = promptFrame.width;
     frameHeight.value = promptFrame.height;
   }, [frameHeight, frameWidth, frameX, frameY, promptFrame]);
+
+  useEffect(() => {
+    if (!inlineEditing) return;
+    const frame = requestAnimationFrame(() => inlineScriptInputRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [inlineEditing]);
 
   useEffect(() => {
     guideInteraction.value = withTiming(frameEditing ? 1 : 0, { duration: 180 });
@@ -671,10 +680,23 @@ export function TeleprompterScreen() {
     }, 120);
   }, []);
 
+  const beginInlineEditing = useCallback(() => {
+    if (frameEditing || isRecording || countdownValue !== null) return;
+    setIsScrolling(false);
+    setInlineEditing(true);
+    Haptics.selectionAsync().catch(() => undefined);
+  }, [countdownValue, frameEditing, isRecording]);
+
+  const finishInlineEditing = useCallback(() => {
+    setInlineEditing(false);
+    Keyboard.dismiss();
+  }, []);
+
   const toggleFrameEditing = () => {
     if (isRecording || countdownValue !== null) return;
     setIsScrolling(false);
     setSetupOpen(false);
+    finishInlineEditing();
     setFrameEditing((active) => !active);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
   };
@@ -794,6 +816,7 @@ export function TeleprompterScreen() {
     try {
       recordingStartPendingRef.current = true;
       setIsScrolling(false);
+      finishInlineEditing();
       const granted = await ensurePermissions();
       if (!mountedRef.current || AppState.currentState !== 'active') return;
       if (!granted) {
@@ -923,6 +946,7 @@ export function TeleprompterScreen() {
             disabled={isRecording || countdownValue !== null}
             onPress={() => {
               setFrameEditing(false);
+              finishInlineEditing();
               setSetupOpen(true);
             }}
           />
@@ -971,19 +995,52 @@ export function TeleprompterScreen() {
               paddingTop: viewportHeight * 0.38,
               paddingBottom: viewportHeight * 0.72,
             }}>
-            <View style={settings.mirrorText ? styles.mirrored : undefined}>
-              <Text
-                selectable
-                style={[
-                  styles.promptText,
-                  {
-                    fontSize: settings.fontSize,
-                    lineHeight: settings.fontSize * 1.34,
-                    paddingHorizontal: isLandscape ? 36 : 20,
-                  },
-                ]}>
-                {script}
-              </Text>
+            <View style={!inlineEditing && settings.mirrorText ? styles.mirrored : undefined}>
+              {inlineEditing ? (
+                <TextInput
+                  ref={inlineScriptInputRef}
+                  accessibilityLabel="Quick edit script"
+                  autoCorrect
+                  blurOnSubmit={false}
+                  maxLength={SCRIPT_CHARACTER_LIMIT}
+                  multiline
+                  onBlur={finishInlineEditing}
+                  onChangeText={(value) => setScript(value.slice(0, SCRIPT_CHARACTER_LIMIT))}
+                  placeholder="Tap to write your script"
+                  placeholderTextColor={COLORS.muted}
+                  scrollEnabled={false}
+                  style={[
+                    styles.promptText,
+                    styles.inlineScriptInput,
+                    {
+                      fontSize: settings.fontSize,
+                      lineHeight: settings.fontSize * 1.34,
+                      paddingHorizontal: isLandscape ? 36 : 20,
+                    },
+                  ]}
+                  value={script}
+                />
+              ) : (
+                <Pressable
+                  accessibilityLabel="Quick edit script"
+                  accessibilityRole="button"
+                  disabled={frameEditing || isRecording || countdownValue !== null}
+                  onPress={beginInlineEditing}
+                  style={styles.promptTextPressable}>
+                  <Text
+                    selectable
+                    style={[
+                      styles.promptText,
+                      {
+                        fontSize: settings.fontSize,
+                        lineHeight: settings.fontSize * 1.34,
+                        paddingHorizontal: isLandscape ? 36 : 20,
+                      },
+                    ]}>
+                    {script || 'Tap to write your script'}
+                  </Text>
+                </Pressable>
+              )}
             </View>
           </ScrollView>
         </View>
@@ -1235,6 +1292,8 @@ const styles = StyleSheet.create({
   resizeHandleBottomLeft: { bottom: -13, left: -13 },
   resizeHandleBottomRight: { right: -13, bottom: -13 },
   promptText: { color: COLORS.ink, fontWeight: '700', letterSpacing: -0.6, textAlign: 'center' },
+  promptTextPressable: { alignSelf: 'stretch', minHeight: 54 },
+  inlineScriptInput: { minHeight: 54, paddingVertical: 0, textAlignVertical: 'top' },
   mirrored: { transform: [{ scaleX: -1 }] },
   countdownOverlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0,0,0,0.48)', alignItems: 'center', justifyContent: 'center' },
   countdownNumber: { color: COLORS.accent, fontSize: 132, lineHeight: 142, fontWeight: '900', fontVariant: ['tabular-nums'] },
