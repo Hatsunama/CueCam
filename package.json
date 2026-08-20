@@ -4,16 +4,16 @@
   "version": "1.0.10",
   "dependencies": {
     "@react-native-community/slider": "5.2.0",
-    "expo": "~57.0.13",
+    "expo": "~57.0.15",
     "expo-camera": "file:vendor/expo-camera",
-    "expo-constants": "~57.0.11",
+    "expo-constants": "~57.0.13",
     "expo-haptics": "~57.0.1",
     "expo-keep-awake": "~57.0.1",
-    "expo-linking": "~57.0.6",
+    "expo-linking": "~57.0.7",
     "expo-media-library": "~57.0.4",
-    "expo-router": "~57.0.13",
+    "expo-router": "~57.0.15",
     "expo-screen-orientation": "~57.0.1",
-    "expo-splash-screen": "~57.0.6",
+    "expo-splash-screen": "~57.0.7",
     "expo-sqlite": "~57.0.1",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.2",
@@ -42,6 +42,11 @@
     "security:build": "node scripts/verify-build-security.cjs",
     "verify:camera-orientation": "node scripts/verify-camera-orientation.cjs",
     "check": "npm run lint && npm run typecheck && npm run security:build && npm run verify:camera-orientation && npm run doctor"
+  },
+  "expo": {
+    "install": {
+      "exclude": ["expo-camera"]
+    }
   },
   "private": true,
   "license": "MIT",

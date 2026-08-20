@@ -175,15 +175,12 @@ function VideoPicker({
     }
   }, []);
 
-  useEffect(() => {
-    if (!visible) {
-      setSelected([]);
-      setAssets([]);
-      setError(null);
-      return;
-    }
-    void loadVideos();
-  }, [loadVideos, visible]);
+  const resetAndClose = () => {
+    setSelected([]);
+    setAssets([]);
+    setError(null);
+    onClose();
+  };
 
   const toggleAsset = (asset: SelectableVideo) => {
     setSelected((current) => {
@@ -198,14 +195,22 @@ function VideoPicker({
   const addSelected = () => {
     if (!selected.length) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+    setSelected([]);
     onAdd(selected);
   };
 
+  const recordNewVideo = () => {
+    setSelected([]);
+    setAssets([]);
+    setError(null);
+    onRecord();
+  };
+
   return (
-    <Modal animationType="slide" transparent={false} visible={visible} onRequestClose={onClose}>
+    <Modal animationType="slide" transparent={false} visible={visible} onRequestClose={resetAndClose} onShow={() => void loadVideos()}>
       <View style={[styles.pickerScreen, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 }]}>
         <View style={styles.pickerHeader}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Close video picker" onPress={onClose} style={styles.headerButton}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Close video picker" onPress={resetAndClose} style={styles.headerButton}>
             <Text style={styles.headerButtonText}>Cancel</Text>
           </Pressable>
           <View style={styles.pickerHeading}>
@@ -222,7 +227,7 @@ function VideoPicker({
           </Pressable>
         </View>
 
-        <Pressable accessibilityRole="button" onPress={onRecord} style={styles.recordNewButton}>
+        <Pressable accessibilityRole="button" onPress={recordNewVideo} style={styles.recordNewButton}>
           <Text style={styles.recordNewSymbol}>●</Text>
           <View>
             <Text style={styles.recordNewTitle}>Record a new video</Text>
