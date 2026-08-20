@@ -279,7 +279,13 @@ async function lockCurrentOrientation() {
   await ScreenOrientation.lockAsync(fallbackLock);
 }
 
-export function TeleprompterScreen() {
+export function TeleprompterScreen({
+  onExit,
+  onRecordingSaved,
+}: {
+  onExit?: () => void;
+  onRecordingSaved?: (uri: string, durationSeconds: number) => void;
+}) {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
@@ -709,26 +715,28 @@ export function TeleprompterScreen() {
     return microphone.granted;
   };
 
-  const saveRecording = useCallback(async (uri: string) => {
+  const saveRecording = useCallback(async (uri: string): Promise<string | undefined> => {
     try {
       const permission = await MediaLibrary.requestPermissionsAsync(true, ['video']);
       if (!permission.granted) {
         if (mountedRef.current) {
           Alert.alert('Video is in CueCam', 'Gallery access was not granted, so this clip could not be copied to your normal video folder.');
         }
-        return;
+        return undefined;
       }
-      await MediaLibrary.Asset.create(uri);
+      const asset = await MediaLibrary.Asset.create(uri);
       if (!mountedRef.current) return;
       setSavedNotice(true);
       if (toastTimeoutRef.current !== null) clearTimeout(toastTimeoutRef.current);
       toastTimeoutRef.current = setTimeout(() => {
         if (mountedRef.current) setSavedNotice(false);
       }, 2800);
+      return await asset.getUri();
     } catch (error) {
       if (mountedRef.current) {
         Alert.alert('Could not save video', error instanceof Error ? error.message : 'Please try again.');
       }
+      return undefined;
     }
   }, []);
 
@@ -749,8 +757,18 @@ export function TeleprompterScreen() {
     try {
       const camera = cameraRef.current;
       if (!camera) throw new Error('The camera is not ready.');
+      const segmentStartedAt = Date.now();
       const recording = await camera.recordAsync({ maxDuration: 60 * 60 });
-      if (recording?.uri) await saveRecording(recording.uri);
+      const segmentEndedAt = Date.now();
+      if (recording?.uri) {
+        const savedUri = await saveRecording(recording.uri);
+        if (savedUri) {
+          onRecordingSaved?.(
+            savedUri,
+            Math.max(0, Math.round((segmentEndedAt - segmentStartedAt) / 1000)),
+          );
+        }
+      }
     } catch (error) {
       if (
         mountedRef.current &&
@@ -928,6 +946,14 @@ export function TeleprompterScreen() {
           <Text style={styles.brandText}>{isRecording ? formatDuration(recordingSeconds) : 'CUECAM'}</Text>
         </View>
         <View style={styles.topActions}>
+          {onExit ? (
+            <IconButton
+              label="Projects"
+              symbol="‹"
+              disabled={isRecording || countdownValue !== null}
+              onPress={onExit}
+            />
+          ) : null}
           <IconButton
             label={isSwitchingCamera ? 'Switching' : 'Flip'}
             symbol="⇄"
