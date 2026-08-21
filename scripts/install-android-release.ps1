@@ -194,8 +194,8 @@ try {
             throw "Installed APK hash mismatch. Expected $apkHash but found $deviceHash."
         }
 
-        $launchableActivity = (adb -s $phoneSerial shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER $packageName).Trim()
-        if ($LASTEXITCODE -ne 0 -or $launchableActivity -notmatch [regex]::Escape($packageName)) {
+        $launchableActivity = @(adb -s $phoneSerial shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER $packageName)
+        if ($LASTEXITCODE -ne 0 -or ($launchableActivity -join "`n") -notmatch [regex]::Escape($packageName)) {
             throw 'CueCam installed without a resolvable launcher activity.'
         }
 
