@@ -149,6 +149,7 @@ try {
             throw 'Unable to inspect APK permissions.'
         }
         $forbiddenPermissions = @(
+            'android.permission.ACCESS_NETWORK_STATE',
             'android.permission.INTERNET',
             'android.permission.READ_EXTERNAL_STORAGE',
             'android.permission.READ_MEDIA_VIDEO',
@@ -193,7 +194,7 @@ try {
             throw "Installed APK hash mismatch. Expected $apkHash but found $deviceHash."
         }
 
-        $launchableActivity = (adb -s $phoneSerial shell cmd package resolve-activity --brief $packageName).Trim()
+        $launchableActivity = (adb -s $phoneSerial shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER $packageName).Trim()
         if ($LASTEXITCODE -ne 0 -or $launchableActivity -notmatch [regex]::Escape($packageName)) {
             throw 'CueCam installed without a resolvable launcher activity.'
         }

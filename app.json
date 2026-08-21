@@ -26,6 +26,7 @@
       "versionCode": 12,
       "allowBackup": false,
       "blockedPermissions": [
+        "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.INTERNET",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_VIDEO",
