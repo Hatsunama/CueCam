@@ -13,6 +13,7 @@ assert.equal(appConfig.ios.bundleIdentifier, 'com.thea.cuecam');
 assert.equal(appConfig.android.allowBackup, false);
 
 const forbiddenPermissions = [
+  'android.permission.INTERNET',
   'android.permission.READ_EXTERNAL_STORAGE',
   'android.permission.READ_MEDIA_VIDEO',
   'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',

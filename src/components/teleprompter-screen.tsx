@@ -1,10 +1,5 @@
 import Slider from '@react-native-community/slider';
-import {
-  CameraType,
-  CameraView,
-  useCameraPermissions,
-  useMicrophonePermissions,
-} from 'expo-camera';
+import { CameraView } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import * as KeepAwake from 'expo-keep-awake';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -19,8 +14,6 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import {
-  Alert,
-  AppState,
   Keyboard,
   KeyboardAvoidingView,
   LayoutChangeEvent,
@@ -34,17 +27,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import {
-  lockRecordingOrientation,
-  unlockRecordingOrientation,
-} from '@/services/recording-orientation';
+import { useCameraRecordingSession } from '@/hooks/use-camera-recording-session';
 import {
   PromptFrame,
   SCRIPT_CHARACTER_LIMIT,
   TeleprompterSettings,
 } from '@/services/teleprompter-storage';
 import { useTeleprompterPersistence } from '@/hooks/use-teleprompter-persistence';
-import { saveVideoToCameraRoll } from '@/services/video-library';
 
 const COLORS = {
   accent: '#E8FF5B',
@@ -180,7 +169,6 @@ export function TeleprompterScreen() {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
-  const cameraRef = useRef<CameraView>(null);
   const promptRef = useRef<ScrollView>(null);
   const inlineScriptInputRef = useRef<TextInput>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -190,13 +178,6 @@ export function TeleprompterScreen() {
   const viewportHeightRef = useRef(0);
   const manualScrollActiveRef = useRef(false);
   const manualScrollEndTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const recordingSessionActiveRef = useRef(false);
-  const recordingSegmentActiveRef = useRef(false);
-  const recordingStartPendingRef = useRef(false);
-  const resumeAfterCameraReadyRef = useRef(false);
-  const mountedRef = useRef(true);
-  const countdownRunRef = useRef(0);
-  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const frameX = useSharedValue(0);
   const frameY = useSharedValue(0);
   const frameWidth = useSharedValue(0);
@@ -209,10 +190,6 @@ export function TeleprompterScreen() {
   const guideInteraction = useSharedValue(0);
   const scrollProgress = useSharedValue(0);
 
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
-  const [cameraReady, setCameraReady] = useState(false);
-  const [facing, setFacing] = useState<CameraType>('front');
   const {
     script,
     setScript,
@@ -225,12 +202,44 @@ export function TeleprompterScreen() {
   const [frameEditing, setFrameEditing] = useState(false);
   const [inlineEditing, setInlineEditing] = useState(false);
   const [viewportHeight, setViewportHeight] = useState(0);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isSwitchingCamera, setIsSwitchingCamera] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
-  const [countdownValue, setCountdownValue] = useState<number | null>(null);
-  const [recordingSeconds, setRecordingSeconds] = useState(0);
-  const [savedNotice, setSavedNotice] = useState(false);
+
+  const finishInlineEditing = useCallback(() => {
+    setInlineEditing(false);
+    Keyboard.dismiss();
+  }, []);
+
+  const {
+    beginRecording,
+    cameraPermission,
+    cameraReady,
+    cameraRef,
+    countdownValue,
+    facing,
+    flipCamera,
+    handleCameraMountError,
+    handleCameraReady,
+    isRecording,
+    isSwitchingCamera,
+    microphonePermission,
+    recordingSeconds,
+    requestRecordingPermissions,
+    savedNotice,
+    stopRecording,
+  } = useCameraRecordingSession({
+    canRecord: Boolean(script.trim()),
+    countdownSeconds: settings.countdown,
+    onPrepare: () => {
+      setIsScrolling(false);
+      finishInlineEditing();
+    },
+    onPermissionsGranted: () => {
+      setSetupOpen(false);
+      setFrameEditing(false);
+    },
+    onRecordingStarted: () => setIsScrolling(true),
+    onRecordingFinished: () => setIsScrolling(false),
+  });
 
   const orientationKey = isLandscape ? 'landscape' : 'portrait';
   const defaultPromptFrame = useMemo(
@@ -246,41 +255,15 @@ export function TeleprompterScreen() {
   const scriptWords = useMemo(() => script.trim().split(/\s+/).filter(Boolean).length, [script]);
   const estimatedMinutes = Math.max(1, Math.ceil(scriptWords / Math.max(estimatedWpm, 1)));
 
-  const stopActiveCameraRecording = useCallback(() => {
-    cameraRef.current?.stopRecording();
-  }, []);
-
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') return;
-      countdownRunRef.current += 1;
-      setCountdownValue(null);
-      if (!recordingSessionActiveRef.current) return;
-      recordingSessionActiveRef.current = false;
-      resumeAfterCameraReadyRef.current = false;
-      cameraRef.current?.stopRecording();
-    });
-    return () => subscription.remove();
-  }, []);
-
-  useEffect(() => {
-    mountedRef.current = true;
     return () => {
-      mountedRef.current = false;
-      countdownRunRef.current += 1;
-      recordingSessionActiveRef.current = false;
-      recordingStartPendingRef.current = false;
-      resumeAfterCameraReadyRef.current = false;
-      stopActiveCameraRecording();
-      unlockRecordingOrientation().catch(() => undefined);
       KeepAwake.deactivateKeepAwake('cuecam-session').catch(() => undefined);
       if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
       if (manualScrollEndTimeoutRef.current !== null) {
         clearTimeout(manualScrollEndTimeoutRef.current);
       }
-      if (toastTimeoutRef.current !== null) clearTimeout(toastTimeoutRef.current);
     };
-  }, [stopActiveCameraRecording]);
+  }, []);
 
   useEffect(() => {
     frameX.value = promptFrame.x;
@@ -465,12 +448,6 @@ export function TeleprompterScreen() {
   ]);
 
   useEffect(() => {
-    if (!isRecording) return;
-    const timer = setInterval(() => setRecordingSeconds((value) => value + 1), 1000);
-    return () => clearInterval(timer);
-  }, [isRecording]);
-
-  useEffect(() => {
     const active = isRecording || isScrolling;
     if (active) {
       KeepAwake.activateKeepAwakeAsync('cuecam-session').catch(() => undefined);
@@ -568,11 +545,6 @@ export function TeleprompterScreen() {
     Haptics.selectionAsync().catch(() => undefined);
   }, [countdownValue, frameEditing, isRecording]);
 
-  const finishInlineEditing = useCallback(() => {
-    setInlineEditing(false);
-    Keyboard.dismiss();
-  }, []);
-
   const toggleFrameEditing = () => {
     if (isRecording || countdownValue !== null) return;
     setIsScrolling(false);
@@ -580,178 +552,6 @@ export function TeleprompterScreen() {
     finishInlineEditing();
     setFrameEditing((active) => !active);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-  };
-
-  const ensurePermissions = async () => {
-    const camera = cameraPermission?.granted ? cameraPermission : await requestCameraPermission();
-    if (!camera.granted) return false;
-    const microphone = microphonePermission?.granted
-      ? microphonePermission
-      : await requestMicrophonePermission();
-    return microphone.granted;
-  };
-
-  const saveRecording = useCallback(async (uri: string) => {
-    try {
-      const result = await saveVideoToCameraRoll(uri);
-      if (result === 'permission-denied') {
-        if (mountedRef.current) {
-          Alert.alert('Video is in CueCam', 'Gallery access was not granted, so this clip could not be copied to your normal video folder.');
-        }
-        return;
-      }
-      if (!mountedRef.current) return;
-      setSavedNotice(true);
-      if (toastTimeoutRef.current !== null) clearTimeout(toastTimeoutRef.current);
-      toastTimeoutRef.current = setTimeout(() => {
-        if (mountedRef.current) setSavedNotice(false);
-      }, 2800);
-    } catch (error) {
-      if (mountedRef.current) {
-        Alert.alert('Could not save video', error instanceof Error ? error.message : 'Please try again.');
-      }
-    }
-  }, []);
-
-  const finishRecordingSession = useCallback(() => {
-    recordingSessionActiveRef.current = false;
-    resumeAfterCameraReadyRef.current = false;
-    unlockRecordingOrientation().catch(() => undefined);
-    if (!mountedRef.current) return;
-    setIsSwitchingCamera(false);
-    setIsRecording(false);
-    setIsScrolling(false);
-  }, []);
-
-  const recordCameraSegment = async () => {
-    if (!recordingSessionActiveRef.current || recordingSegmentActiveRef.current) return;
-    recordingSegmentActiveRef.current = true;
-
-    try {
-      const camera = cameraRef.current;
-      if (!camera) throw new Error('The camera is not ready.');
-      const recording = await camera.recordAsync({ maxDuration: 60 * 60 });
-      if (recording?.uri) {
-        await saveRecording(recording.uri);
-      }
-    } catch (error) {
-      if (
-        mountedRef.current &&
-        recordingSessionActiveRef.current &&
-        !resumeAfterCameraReadyRef.current
-      ) {
-        Alert.alert('Recording stopped', error instanceof Error ? error.message : 'The camera could not continue recording.');
-        recordingSessionActiveRef.current = false;
-      }
-    } finally {
-      recordingSegmentActiveRef.current = false;
-
-      if (!recordingSessionActiveRef.current) {
-        finishRecordingSession();
-      } else if (resumeAfterCameraReadyRef.current) {
-        if (mountedRef.current) {
-          setCameraReady(false);
-          setFacing((value) => (value === 'front' ? 'back' : 'front'));
-        }
-      } else {
-        finishRecordingSession();
-      }
-    }
-  };
-
-  const handleCameraReady = () => {
-    setCameraReady(true);
-    if (!recordingSessionActiveRef.current || !resumeAfterCameraReadyRef.current) return;
-    resumeAfterCameraReadyRef.current = false;
-    setIsSwitchingCamera(false);
-    requestAnimationFrame(() => void recordCameraSegment());
-  };
-
-  const flipCamera = () => {
-    if (countdownValue !== null || isSwitchingCamera) return;
-    Haptics.selectionAsync().catch(() => undefined);
-
-    if (!isRecording) {
-      setCameraReady(false);
-      setFacing((value) => (value === 'front' ? 'back' : 'front'));
-      return;
-    }
-
-    resumeAfterCameraReadyRef.current = true;
-    setIsSwitchingCamera(true);
-    cameraRef.current?.stopRecording();
-  };
-
-  const beginRecording = async () => {
-    if (
-      !cameraReady ||
-      !script.trim() ||
-      countdownValue !== null ||
-      recordingStartPendingRef.current ||
-      recordingSessionActiveRef.current
-    ) return;
-    try {
-      recordingStartPendingRef.current = true;
-      setIsScrolling(false);
-      finishInlineEditing();
-      const granted = await ensurePermissions();
-      if (!mountedRef.current || AppState.currentState !== 'active') return;
-      if (!granted) {
-        Alert.alert('Permissions needed', 'CueCam needs camera and microphone access to record your video.');
-        return;
-      }
-
-      setSetupOpen(false);
-      setFrameEditing(false);
-      setRecordingSeconds(0);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
-
-      const countdownRun = ++countdownRunRef.current;
-      for (let number = settings.countdown; number > 0; number -= 1) {
-        setCountdownValue(number);
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        if (
-          !mountedRef.current ||
-          AppState.currentState !== 'active' ||
-          countdownRunRef.current !== countdownRun
-        ) return;
-      }
-      setCountdownValue(null);
-      try {
-        await lockRecordingOrientation();
-      } catch (error) {
-        Alert.alert(
-          'Could not lock orientation',
-          error instanceof Error ? error.message : 'Recording did not start. Please try again.',
-        );
-        return;
-      }
-      if (!mountedRef.current || AppState.currentState !== 'active' || !cameraRef.current) {
-        unlockRecordingOrientation().catch(() => undefined);
-        return;
-      }
-      recordingSessionActiveRef.current = true;
-      setIsRecording(true);
-      setIsScrolling(true);
-      void recordCameraSegment();
-    } finally {
-      recordingStartPendingRef.current = false;
-    }
-  };
-
-  const stopRecording = () => {
-    countdownRunRef.current += 1;
-    setCountdownValue(null);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
-    recordingSessionActiveRef.current = false;
-    resumeAfterCameraReadyRef.current = false;
-    setIsSwitchingCamera(false);
-
-    if (recordingSegmentActiveRef.current) {
-      cameraRef.current?.stopRecording();
-    } else {
-      finishRecordingSession();
-    }
   };
 
   const toggleScroll = () => {
@@ -767,13 +567,6 @@ export function TeleprompterScreen() {
     const maximumOffset = Math.max(0, contentHeightRef.current - nextHeight);
     scrollProgress.value =
       maximumOffset > 0 ? clamp(offsetRef.current / maximumOffset, 0, 1) : 0;
-  };
-
-  const handleCameraMountError = ({ message }: { message: string }) => {
-    recordingSessionActiveRef.current = false;
-    resumeAfterCameraReadyRef.current = false;
-    finishRecordingSession();
-    Alert.alert('Camera unavailable', message);
   };
 
   if (!cameraPermission || !microphonePermission) {
@@ -1112,9 +905,9 @@ export function TeleprompterScreen() {
 
               {missingPermissions && (
                 <Pressable
-                  onPress={ensurePermissions}
+                  onPress={() => void requestRecordingPermissions()}
                   style={({ pressed }) => [styles.permissionButton, pressed && styles.pressed]}>
-                  <Text style={styles.permissionButtonText}>Enable camera + microphone</Text>
+                  <Text style={styles.permissionButtonText}>Enable recording access</Text>
                 </Pressable>
               )}
 

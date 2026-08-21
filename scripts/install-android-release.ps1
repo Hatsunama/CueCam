@@ -149,6 +149,7 @@ try {
             throw 'Unable to inspect APK permissions.'
         }
         $forbiddenPermissions = @(
+            'android.permission.INTERNET',
             'android.permission.READ_EXTERNAL_STORAGE',
             'android.permission.READ_MEDIA_VIDEO',
             'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
