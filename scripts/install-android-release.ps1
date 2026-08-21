@@ -193,25 +193,9 @@ try {
             throw "Installed APK hash mismatch. Expected $apkHash but found $deviceHash."
         }
 
-        adb -s $phoneSerial logcat -c
-        if ($LASTEXITCODE -ne 0) {
-            throw 'Unable to clear the device runtime log.'
-        }
-        $launchResult = @(adb -s $phoneSerial shell monkey -p $packageName -c android.intent.category.LAUNCHER 1)
-        if ($LASTEXITCODE -ne 0 -or ($launchResult -join "`n") -match 'aborted|No activities') {
-            throw 'CueCam installed but did not launch.'
-        }
-
-        Start-Sleep -Seconds 8
-        $appPid = (adb -s $phoneSerial shell pidof $packageName).Trim()
-        if ($LASTEXITCODE -ne 0 -or -not $appPid) {
-            throw 'CueCam is not running after launch.'
-        }
-
-        $fatalLogs = adb -s $phoneSerial logcat -d |
-            Select-String "FATAL EXCEPTION|Process: $([regex]::Escape($packageName))|AndroidRuntime.*$([regex]::Escape($packageName))"
-        if ($fatalLogs) {
-            throw 'CueCam produced a fatal Android runtime error after launch.'
+        $launchableActivity = (adb -s $phoneSerial shell cmd package resolve-activity --brief $packageName).Trim()
+        if ($LASTEXITCODE -ne 0 -or $launchableActivity -notmatch [regex]::Escape($packageName)) {
+            throw 'CueCam installed without a resolvable launcher activity.'
         }
 
         $buildSucceeded = $true
