@@ -7,8 +7,6 @@ import {
 } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import * as KeepAwake from 'expo-keep-awake';
-import * as MediaLibrary from 'expo-media-library';
-import * as ScreenOrientation from 'expo-screen-orientation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
@@ -36,6 +34,18 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import {
+  lockRecordingOrientation,
+  unlockRecordingOrientation,
+} from '@/services/recording-orientation';
+import {
+  PromptFrame,
+  SCRIPT_CHARACTER_LIMIT,
+  TeleprompterSettings,
+} from '@/services/teleprompter-storage';
+import { useTeleprompterPersistence } from '@/hooks/use-teleprompter-persistence';
+import { saveVideoToCameraRoll } from '@/services/video-library';
+
 const COLORS = {
   accent: '#E8FF5B',
   coral: '#FF6B55',
@@ -46,44 +56,10 @@ const COLORS = {
   black: '#090A08',
 };
 
-const DEFAULT_SCRIPT = `Here is your script.
-
-Take a breath, look into the lens, and speak like you are talking to one person.
-
-CueCam will keep the words moving while the camera records. You can pause the scroll at any time without stopping your video.
-
-Tap Edit to paste in your own script, then choose your text size, speed, countdown, and overlay style.`;
-
-const SCRIPT_CHARACTER_LIMIT = 300_000;
 const MIN_PROMPT_WIDTH = 220;
 const MIN_PROMPT_HEIGHT = 180;
 const PROMPT_SCREEN_MARGIN = 14;
 const SCROLL_MARKER_HEIGHT = 44;
-
-type FrameRect = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
-type StoredFrames = Partial<Record<'portrait' | 'landscape', FrameRect>>;
-
-type StoredSettings = {
-  fontSize: number;
-  speed: number;
-  countdown: number;
-  overlayOpacity: number;
-  mirrorText: boolean;
-};
-
-const DEFAULT_SETTINGS: StoredSettings = {
-  fontSize: 38,
-  speed: 38,
-  countdown: 3,
-  overlayOpacity: 0.64,
-  mirrorText: false,
-};
 
 function clamp(value: number, minimum: number, maximum: number) {
   'worklet';
@@ -96,7 +72,7 @@ function getDefaultPromptFrame(
   landscape: boolean,
   topInset: number,
   bottomInset: number,
-): FrameRect {
+): PromptFrame {
   const x = landscape ? screenWidth * 0.15 : 18;
   const y = landscape ? topInset + 66 : Math.max(topInset + 86, screenHeight * 0.19);
   const bottom = landscape
@@ -111,7 +87,7 @@ function getDefaultPromptFrame(
   };
 }
 
-function fitFrameToScreen(frame: FrameRect, screenWidth: number, screenHeight: number): FrameRect {
+function fitFrameToScreen(frame: PromptFrame, screenWidth: number, screenHeight: number): PromptFrame {
   const maximumWidth = Math.max(MIN_PROMPT_WIDTH, screenWidth - PROMPT_SCREEN_MARGIN * 2);
   const maximumHeight = Math.max(MIN_PROMPT_HEIGHT, screenHeight - PROMPT_SCREEN_MARGIN * 2);
   const nextWidth = clamp(frame.width, MIN_PROMPT_WIDTH, maximumWidth);
@@ -123,65 +99,6 @@ function fitFrameToScreen(frame: FrameRect, screenWidth: number, screenHeight: n
     width: nextWidth,
     height: nextHeight,
   };
-}
-
-function finiteNumber(value: unknown, fallback: number, minimum: number, maximum: number) {
-  return typeof value === 'number' && Number.isFinite(value)
-    ? clamp(value, minimum, maximum)
-    : fallback;
-}
-
-function sanitizeSettings(value: unknown): StoredSettings {
-  const candidate = value && typeof value === 'object' ? value as Partial<StoredSettings> : {};
-  return {
-    fontSize: finiteNumber(candidate.fontSize, DEFAULT_SETTINGS.fontSize, 24, 68),
-    speed: finiteNumber(candidate.speed, DEFAULT_SETTINGS.speed, 10, 92),
-    countdown: candidate.countdown === 0 || candidate.countdown === 3 || candidate.countdown === 5
-      ? candidate.countdown
-      : DEFAULT_SETTINGS.countdown,
-    overlayOpacity: finiteNumber(candidate.overlayOpacity, DEFAULT_SETTINGS.overlayOpacity, 0.2, 0.9),
-    mirrorText: typeof candidate.mirrorText === 'boolean'
-      ? candidate.mirrorText
-      : DEFAULT_SETTINGS.mirrorText,
-  };
-}
-
-function sanitizeFrame(value: unknown): FrameRect | undefined {
-  if (!value || typeof value !== 'object') return undefined;
-  const candidate = value as Partial<FrameRect>;
-  if (
-    !Number.isFinite(candidate.x) ||
-    !Number.isFinite(candidate.y) ||
-    !Number.isFinite(candidate.width) ||
-    !Number.isFinite(candidate.height)
-  ) return undefined;
-  return candidate as FrameRect;
-}
-
-function sanitizeFrames(value: unknown): StoredFrames {
-  if (!value || typeof value !== 'object') return {};
-  const candidate = value as StoredFrames;
-  const portrait = sanitizeFrame(candidate.portrait);
-  const landscape = sanitizeFrame(candidate.landscape);
-  return {
-    ...(portrait ? { portrait } : {}),
-    ...(landscape ? { landscape } : {}),
-  };
-}
-
-function readStored<T>(key: string, fallback: T, sanitize: (value: unknown) => T): T {
-  try {
-    const value = globalThis.localStorage?.getItem(key);
-    return value ? sanitize(JSON.parse(value)) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeStored(key: string, value: unknown) {
-  try {
-    globalThis.localStorage?.setItem(key, JSON.stringify(value));
-  } catch {}
 }
 
 function IconButton({
@@ -259,33 +176,7 @@ function formatDuration(totalSeconds: number) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-async function lockCurrentOrientation() {
-  const orientation = await ScreenOrientation.getOrientationAsync();
-  const locks: Partial<Record<ScreenOrientation.Orientation, ScreenOrientation.OrientationLock>> = {
-    [ScreenOrientation.Orientation.PORTRAIT_UP]: ScreenOrientation.OrientationLock.PORTRAIT_UP,
-    [ScreenOrientation.Orientation.PORTRAIT_DOWN]: ScreenOrientation.OrientationLock.PORTRAIT_DOWN,
-    [ScreenOrientation.Orientation.LANDSCAPE_LEFT]: ScreenOrientation.OrientationLock.LANDSCAPE_LEFT,
-    [ScreenOrientation.Orientation.LANDSCAPE_RIGHT]: ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT,
-  };
-  const preferredLock = locks[orientation] ?? ScreenOrientation.OrientationLock.DEFAULT;
-  if (await ScreenOrientation.supportsOrientationLockAsync(preferredLock)) {
-    await ScreenOrientation.lockAsync(preferredLock);
-    return;
-  }
-  const fallbackLock = orientation === ScreenOrientation.Orientation.LANDSCAPE_LEFT ||
-    orientation === ScreenOrientation.Orientation.LANDSCAPE_RIGHT
-    ? ScreenOrientation.OrientationLock.LANDSCAPE
-    : ScreenOrientation.OrientationLock.PORTRAIT_UP;
-  await ScreenOrientation.lockAsync(fallbackLock);
-}
-
-export function TeleprompterScreen({
-  onExit,
-  onRecordingSaved,
-}: {
-  onExit?: () => void;
-  onRecordingSaved?: (uri: string, durationSeconds: number) => void;
-}) {
+export function TeleprompterScreen() {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
@@ -322,17 +213,14 @@ export function TeleprompterScreen({
   const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
   const [cameraReady, setCameraReady] = useState(false);
   const [facing, setFacing] = useState<CameraType>('front');
-  const [script, setScript] = useState(() => readStored(
-    'cuecam.script',
-    DEFAULT_SCRIPT,
-    (value) => typeof value === 'string' ? value.slice(0, SCRIPT_CHARACTER_LIMIT) : DEFAULT_SCRIPT,
-  ));
-  const [settings, setSettings] = useState<StoredSettings>(() =>
-    readStored('cuecam.settings', DEFAULT_SETTINGS, sanitizeSettings),
-  );
-  const [storedFrames, setStoredFrames] = useState<StoredFrames>(() =>
-    readStored('cuecam.promptFrames', {}, sanitizeFrames),
-  );
+  const {
+    script,
+    setScript,
+    settings,
+    setSettings,
+    storedFrames,
+    setStoredFrames,
+  } = useTeleprompterPersistence();
   const [setupOpen, setSetupOpen] = useState(true);
   const [frameEditing, setFrameEditing] = useState(false);
   const [inlineEditing, setInlineEditing] = useState(false);
@@ -363,18 +251,6 @@ export function TeleprompterScreen({
   }, []);
 
   useEffect(() => {
-    writeStored('cuecam.script', script);
-  }, [script]);
-
-  useEffect(() => {
-    writeStored('cuecam.settings', settings);
-  }, [settings]);
-
-  useEffect(() => {
-    writeStored('cuecam.promptFrames', storedFrames);
-  }, [storedFrames]);
-
-  useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') return;
       countdownRunRef.current += 1;
@@ -396,7 +272,7 @@ export function TeleprompterScreen({
       recordingStartPendingRef.current = false;
       resumeAfterCameraReadyRef.current = false;
       stopActiveCameraRecording();
-      ScreenOrientation.unlockAsync().catch(() => undefined);
+      unlockRecordingOrientation().catch(() => undefined);
       KeepAwake.deactivateKeepAwake('cuecam-session').catch(() => undefined);
       if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
       if (manualScrollEndTimeoutRef.current !== null) {
@@ -437,11 +313,11 @@ export function TeleprompterScreen({
   }, [cropPulse, frameEditing, guideInteraction]);
 
   const commitPromptFrame = useCallback(
-    (nextFrame: FrameRect) => {
+    (nextFrame: PromptFrame) => {
       const fittedFrame = fitFrameToScreen(nextFrame, width, height);
       setStoredFrames((current) => ({ ...current, [orientationKey]: fittedFrame }));
     },
-    [height, orientationKey, width],
+    [height, orientationKey, setStoredFrames, width],
   );
 
   const promptFrameStyle = useAnimatedStyle(() => ({
@@ -639,9 +515,9 @@ export function TeleprompterScreen({
     };
   }, [isScrolling, scrollProgress, settings.speed]);
 
-  const updateSetting = useCallback(<K extends keyof StoredSettings>(key: K, value: StoredSettings[K]) => {
+  const updateSetting = useCallback(<K extends keyof TeleprompterSettings>(key: K, value: TeleprompterSettings[K]) => {
     setSettings((current) => ({ ...current, [key]: value }));
-  }, []);
+  }, [setSettings]);
 
   const resetPrompt = useCallback(() => {
     manualScrollActiveRef.current = false;
@@ -715,35 +591,32 @@ export function TeleprompterScreen({
     return microphone.granted;
   };
 
-  const saveRecording = useCallback(async (uri: string): Promise<string | undefined> => {
+  const saveRecording = useCallback(async (uri: string) => {
     try {
-      const permission = await MediaLibrary.requestPermissionsAsync(true, ['video']);
-      if (!permission.granted) {
+      const result = await saveVideoToCameraRoll(uri);
+      if (result === 'permission-denied') {
         if (mountedRef.current) {
           Alert.alert('Video is in CueCam', 'Gallery access was not granted, so this clip could not be copied to your normal video folder.');
         }
-        return undefined;
+        return;
       }
-      const asset = await MediaLibrary.Asset.create(uri);
       if (!mountedRef.current) return;
       setSavedNotice(true);
       if (toastTimeoutRef.current !== null) clearTimeout(toastTimeoutRef.current);
       toastTimeoutRef.current = setTimeout(() => {
         if (mountedRef.current) setSavedNotice(false);
       }, 2800);
-      return await asset.getUri();
     } catch (error) {
       if (mountedRef.current) {
         Alert.alert('Could not save video', error instanceof Error ? error.message : 'Please try again.');
       }
-      return undefined;
     }
   }, []);
 
   const finishRecordingSession = useCallback(() => {
     recordingSessionActiveRef.current = false;
     resumeAfterCameraReadyRef.current = false;
-    ScreenOrientation.unlockAsync().catch(() => undefined);
+    unlockRecordingOrientation().catch(() => undefined);
     if (!mountedRef.current) return;
     setIsSwitchingCamera(false);
     setIsRecording(false);
@@ -757,17 +630,9 @@ export function TeleprompterScreen({
     try {
       const camera = cameraRef.current;
       if (!camera) throw new Error('The camera is not ready.');
-      const segmentStartedAt = Date.now();
       const recording = await camera.recordAsync({ maxDuration: 60 * 60 });
-      const segmentEndedAt = Date.now();
       if (recording?.uri) {
-        const savedUri = await saveRecording(recording.uri);
-        if (savedUri) {
-          onRecordingSaved?.(
-            savedUri,
-            Math.max(0, Math.round((segmentEndedAt - segmentStartedAt) / 1000)),
-          );
-        }
+        await saveRecording(recording.uri);
       }
     } catch (error) {
       if (
@@ -853,7 +718,7 @@ export function TeleprompterScreen({
       }
       setCountdownValue(null);
       try {
-        await lockCurrentOrientation();
+        await lockRecordingOrientation();
       } catch (error) {
         Alert.alert(
           'Could not lock orientation',
@@ -862,7 +727,7 @@ export function TeleprompterScreen({
         return;
       }
       if (!mountedRef.current || AppState.currentState !== 'active' || !cameraRef.current) {
-        ScreenOrientation.unlockAsync().catch(() => undefined);
+        unlockRecordingOrientation().catch(() => undefined);
         return;
       }
       recordingSessionActiveRef.current = true;
@@ -946,14 +811,6 @@ export function TeleprompterScreen({
           <Text style={styles.brandText}>{isRecording ? formatDuration(recordingSeconds) : 'CUECAM'}</Text>
         </View>
         <View style={styles.topActions}>
-          {onExit ? (
-            <IconButton
-              label="Projects"
-              symbol="‹"
-              disabled={isRecording || countdownValue !== null}
-              onPress={onExit}
-            />
-          ) : null}
           <IconButton
             label={isSwitchingCamera ? 'Switching' : 'Flip'}
             symbol="⇄"

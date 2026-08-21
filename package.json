@@ -1,7 +1,7 @@
 {
   "name": "cuecam",
   "main": "expo-router/entry",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "dependencies": {
     "@react-native-community/slider": "5.2.0",
     "expo": "~57.0.15",
@@ -40,8 +40,9 @@
     "typecheck": "tsc --noEmit",
     "doctor": "npx expo-doctor",
     "security:build": "node scripts/verify-build-security.cjs",
+    "verify:product-boundary": "node scripts/verify-product-boundary.cjs",
     "verify:camera-orientation": "node scripts/verify-camera-orientation.cjs",
-    "check": "npm run lint && npm run typecheck && npm run security:build && npm run verify:camera-orientation && npm run doctor"
+    "check": "npm run lint && npm run typecheck && npm run security:build && npm run verify:product-boundary && npm run verify:camera-orientation && npm run doctor"
   },
   "expo": {
     "install": {

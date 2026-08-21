@@ -43,6 +43,9 @@ function Get-Sha256 {
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $packageName = 'com.thea.cuecam'
+$appConfig = (Get-Content (Join-Path $projectRoot 'app.json') -Raw | ConvertFrom-Json).expo
+$expectedVersion = [string]$appConfig.version
+$expectedVersionCode = [string]$appConfig.android.versionCode
 $stageRoot = Join-Path "$env:SystemDrive\" "CueCamBuild-$PID"
 $archivePath = Join-Path $env:TEMP "CueCamBuild-$PID.zip"
 $buildSucceeded = $false
@@ -131,8 +134,30 @@ try {
         if ($packageLine -notmatch "name='$([regex]::Escape($packageName))'") {
             throw "Unexpected APK package identity: $packageLine"
         }
+        if ($packageLine -notmatch "versionCode='$([regex]::Escape($expectedVersionCode))'") {
+            throw "Unexpected APK version code: $packageLine"
+        }
+        if ($packageLine -notmatch "versionName='$([regex]::Escape($expectedVersion))'") {
+            throw "Unexpected APK version name: $packageLine"
+        }
         if ($nativeLine -notmatch "'$([regex]::Escape($deviceAbi))'") {
             throw "The APK does not contain the connected phone's ABI: $deviceAbi"
+        }
+
+        $permissions = @(& $aapt dump permissions $apkPath)
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Unable to inspect APK permissions.'
+        }
+        $forbiddenPermissions = @(
+            'android.permission.READ_EXTERNAL_STORAGE',
+            'android.permission.READ_MEDIA_VIDEO',
+            'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
+            'android.permission.SYSTEM_ALERT_WINDOW'
+        )
+        foreach ($permission in $forbiddenPermissions) {
+            if ($permissions -match [regex]::Escape($permission)) {
+                throw "Forbidden permission present in APK: $permission"
+            }
         }
 
         Invoke-Checked -Command $apksigner -Arguments @('verify', '--verbose', '--print-certs', $apkPath)
@@ -151,6 +176,20 @@ try {
         $installResult = @(adb -s $phoneSerial install -r --no-streaming $artifactPath)
         if ($LASTEXITCODE -ne 0 -or $installResult -notcontains 'Success') {
             throw "Android rejected the in-place install. Existing app data was not deleted. $($installResult -join ' ')"
+        }
+
+        $deviceApkPathLine = (adb -s $phoneSerial shell pm path $packageName).Trim()
+        if ($LASTEXITCODE -ne 0 -or $deviceApkPathLine -notmatch '^package:(.+)$') {
+            throw 'Unable to locate the installed APK on the phone.'
+        }
+        $deviceApkPath = $Matches[1]
+        $deviceHashLine = (adb -s $phoneSerial shell sha256sum $deviceApkPath).Trim()
+        if ($LASTEXITCODE -ne 0 -or -not $deviceHashLine) {
+            throw 'Unable to hash the installed APK on the phone.'
+        }
+        $deviceHash = ($deviceHashLine -split '\s+')[0].ToUpperInvariant()
+        if ($deviceHash -ne $apkHash) {
+            throw "Installed APK hash mismatch. Expected $apkHash but found $deviceHash."
         }
 
         adb -s $phoneSerial logcat -c
