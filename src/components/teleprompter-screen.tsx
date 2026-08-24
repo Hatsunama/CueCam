@@ -28,6 +28,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useCameraRecordingSession } from '@/hooks/use-camera-recording-session';
+import { PrivacyPolicyModal } from '@/components/privacy-policy-modal';
 import {
   PromptFrame,
   SCRIPT_CHARACTER_LIMIT,
@@ -201,6 +202,7 @@ export function TeleprompterScreen() {
   const [setupOpen, setSetupOpen] = useState(true);
   const [frameEditing, setFrameEditing] = useState(false);
   const [inlineEditing, setInlineEditing] = useState(false);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
   const [viewportHeight, setViewportHeight] = useState(0);
   const [isScrolling, setIsScrolling] = useState(false);
 
@@ -922,10 +924,19 @@ export function TeleprompterScreen() {
                 <Text style={styles.readyButtonText}>{cameraReady ? 'Ready to record' : 'Starting camera…'}</Text>
                 <Text style={styles.readyArrow}>→</Text>
               </Pressable>
+
+              <Pressable
+                accessibilityLabel="Privacy policy"
+                accessibilityRole="link"
+                onPress={() => setPrivacyOpen(true)}
+                style={({ pressed }) => [styles.privacyLink, pressed && styles.pressed]}>
+                <Text style={styles.privacyLinkText}>Privacy policy</Text>
+              </Pressable>
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
       )}
+      <PrivacyPolicyModal visible={privacyOpen} onClose={() => setPrivacyOpen(false)} />
     </GestureHandlerRootView>
   );
 }
@@ -1007,6 +1018,8 @@ const styles = StyleSheet.create({
   readyButton: { minHeight: 58, borderRadius: 18, paddingHorizontal: 18, backgroundColor: COLORS.accent, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   readyButtonText: { color: COLORS.black, fontSize: 17, fontWeight: '900' },
   readyArrow: { color: COLORS.black, fontSize: 25, fontWeight: '500' },
+  privacyLink: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  privacyLinkText: { color: COLORS.muted, fontSize: 13, fontWeight: '700', textDecorationLine: 'underline' },
   disabled: { opacity: 0.42 },
   pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
 });

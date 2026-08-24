@@ -10,6 +10,7 @@ expo-env.d.ts
 .kotlin/
 *.orig.*
 *.jks
+*.keystore
 *.p8
 *.p12
 *.key
@@ -24,7 +25,10 @@ yarn-error.*
 .DS_Store
 *.pem
 
-.env*.local
+.env
+.env.*
+!.env.example
+google-service-account*.json
 
 *.tsbuildinfo
 
