@@ -116,6 +116,7 @@ class ExpoCameraView(
           else -> Surface.ROTATION_0
         }
 
+        receivedSensorRotation = true
         deviceRotation = rotation
         imageAnalysisUseCase?.targetRotation = rotation
         imageCaptureUseCase?.targetRotation = rotation
@@ -133,6 +134,7 @@ class ExpoCameraView(
   private var videoCaptureUseCase: VideoCapture<Recorder>? = null
   private var recorder: Recorder? = null
   private var deviceRotation = Surface.ROTATION_0
+  private var receivedSensorRotation = false
   private var barcodeFormats: List<BarcodeType> = emptyList()
   private var glSurfaceTexture: SurfaceTexture? = null
   private var isRecording = false
@@ -627,7 +629,12 @@ class ExpoCameraView(
       }
 
     return VideoCapture.Builder(recorder).apply {
-      setTargetRotation(deviceRotation)
+      val rotation = if (receivedSensorRotation) {
+        deviceRotation
+      } else {
+        readDisplayRotation().also { deviceRotation = it }
+      }
+      setTargetRotation(rotation)
       if (mirror) {
         setMirrorMode(MirrorMode.MIRROR_MODE_ON_FRONT_ONLY)
       }
@@ -836,8 +843,18 @@ class ExpoCameraView(
 
   override fun getPreviewSizeAsArray() = intArrayOf(previewView.width, previewView.height)
 
+  @Suppress("DEPRECATION")
+  private fun readDisplayRotation(): Int {
+    return try {
+      currentActivity.windowManager.defaultDisplay.rotation
+    } catch (_: Exception) {
+      Surface.ROTATION_0
+    }
+  }
+
   init {
     orientationEventListener.enable()
+    deviceRotation = readDisplayRotation()
     previewView.setOnHierarchyChangeListener(object : OnHierarchyChangeListener {
       override fun onChildViewRemoved(parent: View?, child: View?) = Unit
       override fun onChildViewAdded(parent: View?, child: View?) {

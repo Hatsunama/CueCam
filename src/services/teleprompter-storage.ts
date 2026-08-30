@@ -1,5 +1,12 @@
 export const SCRIPT_CHARACTER_LIMIT = 300_000;
 
+export const FONT_SIZE_RANGE = { min: 24, max: 68 } as const;
+export const SPEED_RANGE = { min: 10, max: 92 } as const;
+export const OVERLAY_OPACITY_RANGE = { min: 0.2, max: 0.9 } as const;
+export const COUNTDOWN_OPTIONS = [0, 3, 5] as const;
+
+export type CountdownOption = (typeof COUNTDOWN_OPTIONS)[number];
+
 export type PromptFrame = {
   x: number;
   y: number;
@@ -12,7 +19,7 @@ export type StoredFrames = Partial<Record<'portrait' | 'landscape', PromptFrame>
 export type TeleprompterSettings = {
   fontSize: number;
   speed: number;
-  countdown: number;
+  countdown: CountdownOption;
   overlayOpacity: number;
   mirrorText: boolean;
 };
@@ -49,17 +56,26 @@ function finiteNumber(value: unknown, fallback: number, minimum: number, maximum
     : fallback;
 }
 
+function isCountdownOption(value: unknown): value is CountdownOption {
+  return (COUNTDOWN_OPTIONS as readonly number[]).includes(value as number);
+}
+
 function sanitizeSettings(value: unknown): TeleprompterSettings {
   const candidate = value && typeof value === 'object'
     ? value as Partial<TeleprompterSettings>
     : {};
   return {
-    fontSize: finiteNumber(candidate.fontSize, DEFAULT_SETTINGS.fontSize, 24, 68),
-    speed: finiteNumber(candidate.speed, DEFAULT_SETTINGS.speed, 10, 92),
-    countdown: candidate.countdown === 0 || candidate.countdown === 3 || candidate.countdown === 5
+    fontSize: finiteNumber(candidate.fontSize, DEFAULT_SETTINGS.fontSize, FONT_SIZE_RANGE.min, FONT_SIZE_RANGE.max),
+    speed: finiteNumber(candidate.speed, DEFAULT_SETTINGS.speed, SPEED_RANGE.min, SPEED_RANGE.max),
+    countdown: isCountdownOption(candidate.countdown)
       ? candidate.countdown
       : DEFAULT_SETTINGS.countdown,
-    overlayOpacity: finiteNumber(candidate.overlayOpacity, DEFAULT_SETTINGS.overlayOpacity, 0.2, 0.9),
+    overlayOpacity: finiteNumber(
+      candidate.overlayOpacity,
+      DEFAULT_SETTINGS.overlayOpacity,
+      OVERLAY_OPACITY_RANGE.min,
+      OVERLAY_OPACITY_RANGE.max,
+    ),
     mirrorText: typeof candidate.mirrorText === 'boolean'
       ? candidate.mirrorText
       : DEFAULT_SETTINGS.mirrorText,

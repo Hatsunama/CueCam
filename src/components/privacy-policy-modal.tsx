@@ -1,7 +1,7 @@
 import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { PRIVACY_POLICY_SECTIONS, PRIVACY_POLICY_URL } from '@/services/privacy-policy';
+import { PRIVACY_POLICY_EFFECTIVE_DATE, PRIVACY_POLICY_SECTIONS, PRIVACY_POLICY_URL } from '@/services/privacy-policy';
 
 type PrivacyPolicyModalProps = {
   visible: boolean;
@@ -44,7 +44,7 @@ export function PrivacyPolicyModal({ visible, onClose }: PrivacyPolicyModalProps
             <View style={styles.titleWrap}>
               <Text style={styles.eyebrow}>CUECAM</Text>
               <Text accessibilityRole="header" style={styles.title}>Privacy</Text>
-              <Text style={styles.effectiveDate}>Effective August 13, 2026</Text>
+              <Text style={styles.effectiveDate}>Effective {PRIVACY_POLICY_EFFECTIVE_DATE}</Text>
             </View>
             <Pressable
               accessibilityLabel="Close privacy policy"
