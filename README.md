@@ -24,6 +24,41 @@ D6F9363454F96A99DCDA9443B6691B21EEFF572FE4A090D137E56969CF8D05A3
 
 Installing a newer CueCam APK over the existing app normally preserves scripts and settings.
 
+## Direct streamed install from GitHub (Windows + USB)
+
+This installs the published GitHub release directly onto a connected Android phone. It does not require a local build. The APK is streamed to `adb` and the temporary download is removed when the command finishes.
+
+1. Install [Android SDK Platform Tools](https://developer.android.com/tools/releases/platform-tools) and enable USB debugging on the phone.
+2. Open PowerShell in the `platform-tools` folder, connect the phone, approve the USB debugging prompt, and run:
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$Version = '1.0.13'
+$FileName = "cuecam-$Version-arm64-v8a-release.apk"
+$Url = "https://github.com/Hatsunama/CueCam/releases/download/v$Version/$FileName"
+$ExpectedHash = 'D6F9363454F96A99DCDA9443B6691B21EEFF572FE4A090D137E56969CF8D05A3'
+$Apk = Join-Path $env:TEMP $FileName
+
+try {
+    .\adb.exe devices
+    $Device = .\adb.exe devices | Where-Object { $_ -match '^\S+\s+device$' } | Select-Object -First 1
+    if (-not $Device) { throw 'No authorized Android phone was found. Unlock it and approve USB debugging.' }
+    $Serial = ($Device -split '\s+')[0]
+
+    Invoke-WebRequest -Uri $Url -OutFile $Apk
+    $ActualHash = (Get-FileHash -LiteralPath $Apk -Algorithm SHA256).Hash
+    if ($ActualHash -ne $ExpectedHash) { throw 'Checksum mismatch. Installation refused.' }
+
+    .\adb.exe -s $Serial install -r --streaming $Apk
+    .\adb.exe -s $Serial shell pm enable --user 0 com.thea.cuecam | Out-Host
+    .\adb.exe -s $Serial shell am start -W -n com.thea.cuecam/.MainActivity | Out-Host
+} finally {
+    if (Test-Path -LiteralPath $Apk) { Remove-Item -LiteralPath $Apk -Force }
+}
+```
+
+`--streaming` sends the verified GitHub release through ADB without retaining an APK in the project folder. The update uses `-r`, so the existing script and settings remain intact.
+
 ## Install from a Windows PC
 
 This method is useful when browser installation is unavailable.
