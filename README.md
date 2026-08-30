@@ -6,7 +6,7 @@ CueCam is a phone-first teleprompter and video recorder built with Expo 57 and R
 
 The simplest installation uses only the phone:
 
-1. Tap **[Download CueCam 1.0.12 for Android](https://github.com/Hatsunama/CueCam/releases/download/v1.0.12/cuecam-1.0.12-arm64-v8a-release.apk)** in the phone's web browser.
+1. Tap **[Download CueCam 1.0.13 for Android](https://github.com/Hatsunama/CueCam/releases/download/v1.0.13/cuecam-1.0.13-arm64-v8a-release.apk)** in the phone's web browser.
 2. Open the downloaded APK.
 3. If Android blocks the installation, tap **Settings**, enable **Allow from this source** for the browser, then return to the installer. On Android 7, enable **Unknown sources** under **Settings > Security** instead.
 4. Tap **Install**, then **Open**.
@@ -19,7 +19,7 @@ The downloadable build requires Android 7.0 or newer and a 64-bit ARM (`arm64-v8
 Android warns about apps installed outside Google Play. You can verify this release using its SHA-256 checksum:
 
 ```text
-0A27F673198E0F511130638A3B37CE308642B59D31844DCFD4D9D6EA42F65B51
+D6F9363454F96A99DCDA9443B6691B21EEFF572FE4A090D137E56969CF8D05A3
 ```
 
 Installing a newer CueCam APK over the existing app normally preserves scripts and settings.
@@ -35,11 +35,11 @@ This method is useful when browser installation is unavailable.
 5. Open PowerShell in the extracted `platform-tools` directory and run:
 
 ```powershell
-$Version = '1.0.12'
+$Version = '1.0.13'
 $FileName = "cuecam-$Version-arm64-v8a-release.apk"
 $Apk = Join-Path $env:TEMP $FileName
 $Url = "https://github.com/Hatsunama/CueCam/releases/download/v$Version/$FileName"
-$ExpectedHash = '0A27F673198E0F511130638A3B37CE308642B59D31844DCFD4D9D6EA42F65B51'
+$ExpectedHash = 'D6F9363454F96A99DCDA9443B6691B21EEFF572FE4A090D137E56969CF8D05A3'
 
 Invoke-WebRequest -Uri $Url -OutFile $Apk
 $ActualHash = (Get-FileHash -LiteralPath $Apk -Algorithm SHA256).Hash
@@ -64,10 +64,10 @@ This method downloads and verifies CueCam from a Termux shell, but Android still
 pkg update
 pkg install curl coreutils
 
-VERSION='1.0.12'
+VERSION='1.0.13'
 FILE="cuecam-$VERSION-arm64-v8a-release.apk"
 URL="https://github.com/Hatsunama/CueCam/releases/download/v$VERSION/$FILE"
-EXPECTED='0A27F673198E0F511130638A3B37CE308642B59D31844DCFD4D9D6EA42F65B51'
+EXPECTED='D6F9363454F96A99DCDA9443B6691B21EEFF572FE4A090D137E56969CF8D05A3'
 
 curl --fail --location "$URL" --output "$FILE"
 printf '%s  %s\n' "$EXPECTED" "$FILE" | sha256sum --check
