@@ -1,4 +1,5 @@
 export const PRIVACY_POLICY_URL = 'https://github.com/Hatsunama/CueCam/blob/main/PRIVACY.md';
+export const PRIVACY_POLICY_EFFECTIVE_DATE = 'August 13, 2026';
 
 export const PRIVACY_POLICY_SECTIONS = [
   {

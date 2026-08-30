@@ -5,6 +5,7 @@ import {
   useMicrophonePermissions,
 } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
+import * as KeepAwake from 'expo-keep-awake';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, AppState } from 'react-native';
 
@@ -16,6 +17,9 @@ import {
   requestVideoSavePermission,
   saveVideoToCameraRoll,
 } from '@/services/video-library';
+
+const MAX_RECORDING_DURATION_SECONDS = 60 * 60;
+const RECORDING_KEEP_AWAKE_TAG = 'cuecam-recording';
 
 type CameraRecordingSessionOptions = {
   canRecord: boolean;
@@ -64,6 +68,19 @@ export function useCameraRecordingSession(options: CameraRecordingSessionOptions
     callbacksRef.current.onRecordingFinished();
   }, []);
 
+  const abandonSession = useCallback(() => {
+    countdownRunRef.current += 1;
+    if (mountedRef.current) {
+      setCountdownValue(null);
+      setIsSwitchingCamera(false);
+    }
+    if (!sessionActiveRef.current) return;
+    sessionActiveRef.current = false;
+    resumeAfterCameraReadyRef.current = false;
+    if (segmentActiveRef.current) stopCurrentRecording();
+    else finishSession();
+  }, [finishSession, stopCurrentRecording]);
+
   const requestRecordingPermissions = useCallback(async () => {
     const camera = cameraPermission?.granted
       ? cameraPermission
@@ -110,7 +127,7 @@ export function useCameraRecordingSession(options: CameraRecordingSessionOptions
     try {
       const camera = cameraRef.current;
       if (!camera) throw new Error('The camera is not ready.');
-      const recording = await camera.recordAsync({ maxDuration: 60 * 60 });
+      const recording = await camera.recordAsync({ maxDuration: MAX_RECORDING_DURATION_SECONDS });
       if (recording?.uri) await saveRecording(recording.uri);
     } catch (error) {
       if (
@@ -153,12 +170,14 @@ export function useCameraRecordingSession(options: CameraRecordingSessionOptions
 
   const flipCamera = () => {
     if (countdownValue !== null || isSwitchingCamera) return;
-    Haptics.selectionAsync().catch(() => undefined);
     if (!isRecording) {
+      Haptics.selectionAsync().catch(() => undefined);
       setCameraReady(false);
       setFacing((value) => (value === 'front' ? 'back' : 'front'));
       return;
     }
+    if (!segmentActiveRef.current) return;
+    Haptics.selectionAsync().catch(() => undefined);
     resumeAfterCameraReadyRef.current = true;
     setIsSwitchingCamera(true);
     cameraRef.current?.stopRecording();
@@ -167,7 +186,7 @@ export function useCameraRecordingSession(options: CameraRecordingSessionOptions
   const beginRecording = async () => {
     if (
       !cameraReady ||
-      !options.canRecord ||
+      !callbacksRef.current.canRecord ||
       countdownValue !== null ||
       startPendingRef.current ||
       sessionActiveRef.current
@@ -182,13 +201,15 @@ export function useCameraRecordingSession(options: CameraRecordingSessionOptions
         Alert.alert('Permissions needed', 'CueCam needs camera, microphone, and add-only gallery access to record and save your video.');
         return;
       }
+      if (!callbacksRef.current.canRecord) return;
 
       callbacksRef.current.onPermissionsGranted();
       setRecordingSeconds(0);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
 
       const countdownRun = ++countdownRunRef.current;
-      for (let number = options.countdownSeconds; number > 0; number -= 1) {
+      const countdownSeconds = callbacksRef.current.countdownSeconds;
+      for (let number = countdownSeconds; number > 0; number -= 1) {
         setCountdownValue(number);
         await new Promise((resolve) => setTimeout(resolve, 1000));
         if (
@@ -223,15 +244,21 @@ export function useCameraRecordingSession(options: CameraRecordingSessionOptions
   };
 
   const stopRecording = () => {
-    countdownRunRef.current += 1;
-    setCountdownValue(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
-    sessionActiveRef.current = false;
-    resumeAfterCameraReadyRef.current = false;
-    setIsSwitchingCamera(false);
-    if (segmentActiveRef.current) cameraRef.current?.stopRecording();
-    else finishSession();
+    abandonSession();
   };
+
+  useEffect(() => {
+    const held = isRecording || countdownValue !== null;
+    if (held) {
+      KeepAwake.activateKeepAwakeAsync(RECORDING_KEEP_AWAKE_TAG).catch(() => undefined);
+    } else {
+      KeepAwake.deactivateKeepAwake(RECORDING_KEEP_AWAKE_TAG).catch(() => undefined);
+    }
+    return () => {
+      KeepAwake.deactivateKeepAwake(RECORDING_KEEP_AWAKE_TAG).catch(() => undefined);
+    };
+  }, [countdownValue, isRecording]);
 
   useEffect(() => {
     if (!isRecording) return;
@@ -242,41 +269,42 @@ export function useCameraRecordingSession(options: CameraRecordingSessionOptions
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') return;
-      countdownRunRef.current += 1;
-      setCountdownValue(null);
-      if (!sessionActiveRef.current) return;
-      sessionActiveRef.current = false;
-      resumeAfterCameraReadyRef.current = false;
-      stopCurrentRecording();
+      abandonSession();
     });
     return () => subscription.remove();
-  }, [stopCurrentRecording]);
+  }, [abandonSession]);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      countdownRunRef.current += 1;
-      sessionActiveRef.current = false;
       startPendingRef.current = false;
-      resumeAfterCameraReadyRef.current = false;
-      stopCurrentRecording();
+      abandonSession();
       unlockRecordingOrientation().catch(() => undefined);
       if (toastTimeoutRef.current !== null) clearTimeout(toastTimeoutRef.current);
     };
-  }, [stopCurrentRecording]);
+  }, [abandonSession]);
+
+  const isSessionInProgress = isRecording || countdownValue !== null;
+  const cameraPreviewProps = {
+    facing,
+    mirror: facing === 'front',
+    mode: 'video' as const,
+    mute: false,
+    onCameraReady: handleCameraReady,
+    onMountError: handleCameraMountError,
+  };
 
   return {
     beginRecording,
     cameraPermission,
+    cameraPreviewProps,
     cameraReady,
     cameraRef,
     countdownValue,
-    facing,
     flipCamera,
-    handleCameraMountError,
-    handleCameraReady,
     isRecording,
+    isSessionInProgress,
     isSwitchingCamera,
     microphonePermission,
     recordingSeconds,

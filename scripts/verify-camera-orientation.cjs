@@ -26,7 +26,9 @@ const requirements = [
   ['video use-case retention', source.includes('private var videoCaptureUseCase: VideoCapture<Recorder>? = null')],
   ['sensor rotation retention', source.includes('private var deviceRotation = Surface.ROTATION_0')],
   ['video rotation updates', source.includes('videoCaptureUseCase?.targetRotation = rotation')],
-  ['initial video target rotation', source.includes('setTargetRotation(deviceRotation)')],
+  ['display rotation seed', source.includes('readDisplayRotation') && source.includes('defaultDisplay.rotation')],
+  ['sensor rotation gating', source.includes('receivedSensorRotation')],
+  ['initial video target rotation', source.includes('setTargetRotation(rotation)')],
   ['Android source compilation', moduleConfig.android?.publication === undefined],
 ];
 

@@ -3,7 +3,7 @@ import { CameraView } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import * as KeepAwake from 'expo-keep-awake';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   cancelAnimation,
   runOnJS,
@@ -30,8 +30,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCameraRecordingSession } from '@/hooks/use-camera-recording-session';
 import { PrivacyPolicyModal } from '@/components/privacy-policy-modal';
 import {
+  COUNTDOWN_OPTIONS,
+  FONT_SIZE_RANGE,
+  OVERLAY_OPACITY_RANGE,
   PromptFrame,
   SCRIPT_CHARACTER_LIMIT,
+  SPEED_RANGE,
   TeleprompterSettings,
 } from '@/services/teleprompter-storage';
 import { useTeleprompterPersistence } from '@/hooks/use-teleprompter-persistence';
@@ -50,6 +54,7 @@ const MIN_PROMPT_WIDTH = 220;
 const MIN_PROMPT_HEIGHT = 180;
 const PROMPT_SCREEN_MARGIN = 14;
 const SCROLL_MARKER_HEIGHT = 44;
+const PROMPT_SCROLL_KEEP_AWAKE_TAG = 'cuecam-prompt-scroll';
 
 function clamp(value: number, minimum: number, maximum: number) {
   'worklet';
@@ -214,14 +219,13 @@ export function TeleprompterScreen() {
   const {
     beginRecording,
     cameraPermission,
+    cameraPreviewProps,
     cameraReady,
     cameraRef,
     countdownValue,
-    facing,
     flipCamera,
-    handleCameraMountError,
-    handleCameraReady,
     isRecording,
+    isSessionInProgress,
     isSwitchingCamera,
     microphonePermission,
     recordingSeconds,
@@ -259,7 +263,7 @@ export function TeleprompterScreen() {
 
   useEffect(() => {
     return () => {
-      KeepAwake.deactivateKeepAwake('cuecam-session').catch(() => undefined);
+      KeepAwake.deactivateKeepAwake(PROMPT_SCROLL_KEEP_AWAKE_TAG).catch(() => undefined);
       if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
       if (manualScrollEndTimeoutRef.current !== null) {
         clearTimeout(manualScrollEndTimeoutRef.current);
@@ -450,16 +454,15 @@ export function TeleprompterScreen() {
   ]);
 
   useEffect(() => {
-    const active = isRecording || isScrolling;
-    if (active) {
-      KeepAwake.activateKeepAwakeAsync('cuecam-session').catch(() => undefined);
+    if (isScrolling) {
+      KeepAwake.activateKeepAwakeAsync(PROMPT_SCROLL_KEEP_AWAKE_TAG).catch(() => undefined);
     } else {
-      KeepAwake.deactivateKeepAwake('cuecam-session').catch(() => undefined);
+      KeepAwake.deactivateKeepAwake(PROMPT_SCROLL_KEEP_AWAKE_TAG).catch(() => undefined);
     }
     return () => {
-      KeepAwake.deactivateKeepAwake('cuecam-session').catch(() => undefined);
+      KeepAwake.deactivateKeepAwake(PROMPT_SCROLL_KEEP_AWAKE_TAG).catch(() => undefined);
     };
-  }, [isRecording, isScrolling]);
+  }, [isScrolling]);
 
   useEffect(() => {
     if (!isScrolling) {
@@ -578,17 +581,13 @@ export function TeleprompterScreen() {
   const missingPermissions = !cameraPermission.granted || !microphonePermission.granted;
 
   return (
-    <GestureHandlerRootView style={styles.root}>
+    <View style={styles.root}>
       {cameraPermission.granted ? (
         <CameraView
-          key={facing}
+          key={cameraPreviewProps.facing}
           ref={cameraRef}
           style={StyleSheet.absoluteFill}
-          facing={facing}
-          mirror={facing === 'front'}
-          mode="video"
-          onCameraReady={handleCameraReady}
-          onMountError={handleCameraMountError}
+          {...cameraPreviewProps}
         />
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.cameraPlaceholder]} />
@@ -783,16 +782,22 @@ export function TeleprompterScreen() {
         ]}>
         <IconButton label="Restart" symbol="↺" onPress={resetPrompt} />
         <Pressable
-          accessibilityLabel={isRecording ? 'Stop recording' : 'Start recording'}
+          accessibilityLabel={
+            isRecording
+              ? 'Stop recording'
+              : countdownValue !== null
+                ? 'Cancel countdown'
+                : 'Start recording'
+          }
           accessibilityRole="button"
-          disabled={!cameraReady || countdownValue !== null || missingPermissions}
-          onPress={isRecording ? stopRecording : beginRecording}
+          disabled={!isSessionInProgress && (!cameraReady || missingPermissions)}
+          onPress={isSessionInProgress ? stopRecording : beginRecording}
           style={({ pressed }) => [
             styles.recordOuter,
-            (!cameraReady || countdownValue !== null || missingPermissions) && styles.disabled,
+            (!isSessionInProgress && (!cameraReady || missingPermissions)) && styles.disabled,
             pressed && styles.pressed,
           ]}>
-          <View style={[styles.recordInner, isRecording && styles.recordInnerStop]} />
+          <View style={[styles.recordInner, isSessionInProgress && styles.recordInnerStop]} />
         </Pressable>
         <IconButton
           label={isScrolling ? 'Pause' : 'Scroll'}
@@ -854,8 +859,8 @@ export function TeleprompterScreen() {
               <SettingSlider
                 label="Text size"
                 value={settings.fontSize}
-                minimumValue={24}
-                maximumValue={68}
+                minimumValue={FONT_SIZE_RANGE.min}
+                maximumValue={FONT_SIZE_RANGE.max}
                 step={1}
                 valueLabel={`${settings.fontSize} pt`}
                 onValueChange={(value) => updateSetting('fontSize', value)}
@@ -863,8 +868,8 @@ export function TeleprompterScreen() {
               <SettingSlider
                 label="Scroll speed"
                 value={settings.speed}
-                minimumValue={10}
-                maximumValue={92}
+                minimumValue={SPEED_RANGE.min}
+                maximumValue={SPEED_RANGE.max}
                 step={1}
                 valueLabel={`≈ ${estimatedWpm} wpm`}
                 onValueChange={(value) => updateSetting('speed', value)}
@@ -872,8 +877,8 @@ export function TeleprompterScreen() {
               <SettingSlider
                 label="Prompt backdrop"
                 value={settings.overlayOpacity}
-                minimumValue={0.2}
-                maximumValue={0.9}
+                minimumValue={OVERLAY_OPACITY_RANGE.min}
+                maximumValue={OVERLAY_OPACITY_RANGE.max}
                 step={0.05}
                 valueLabel={`${Math.round(settings.overlayOpacity * 100)}%`}
                 onValueChange={(value) => updateSetting('overlayOpacity', value)}
@@ -883,7 +888,7 @@ export function TeleprompterScreen() {
                 <View style={styles.quickGroup}>
                   <Text style={styles.quickLabel}>Countdown</Text>
                   <View style={styles.segmentRow}>
-                    {[0, 3, 5].map((value) => (
+                    {COUNTDOWN_OPTIONS.map((value) => (
                       <Pressable
                         key={value}
                         onPress={() => updateSetting('countdown', value)}
@@ -937,7 +942,7 @@ export function TeleprompterScreen() {
         </KeyboardAvoidingView>
       )}
       <PrivacyPolicyModal visible={privacyOpen} onClose={() => setPrivacyOpen(false)} />
-    </GestureHandlerRootView>
+    </View>
   );
 }
 
