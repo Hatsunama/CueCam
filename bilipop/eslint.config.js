@@ -4,12 +4,6 @@ const expoConfig = require('eslint-config-expo/flat');
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ['dist/*', 'bilipop/**'],
-  },
-  {
-    files: ['src/components/teleprompter-screen.tsx'],
-    rules: {
-      'react-hooks/immutability': 'off',
-    },
+    ignores: ['.expo/*', 'dist/*'],
   },
 ]);

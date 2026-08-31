@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "BiliPop",
+    "slug": "bilipop",
+    "version": "1.0.0",
+    "platforms": ["android", "web"],
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "bilipop",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "app.bilipop",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#FF4FA3",
+        "foregroundImage": "./assets/images/icon.png"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FFD6EC",
+          "image": "./assets/images/icon.png",
+          "imageWidth": 120
+        }
+      ]
+    ]
+  }
+}
