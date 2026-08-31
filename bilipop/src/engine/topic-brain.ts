@@ -176,7 +176,7 @@ export function catalogTagsFor(topics: Topic[]): string[] {
       tags.push(tag);
     }
   }
-  return tags.slice(0, 10);
+  return tags.slice(0, 8);
 }
 
 export function isNoiseEnglishTag(tag: string): boolean {

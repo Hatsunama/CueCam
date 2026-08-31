@@ -35,6 +35,31 @@ function tokenize(text: string): string[] {
   return text.match(TOKEN_PATTERN) ?? [];
 }
 
+function upcomingPhrases(
+  tokens: string[],
+  start: number,
+  maxWords: number,
+): { key: string; end: number }[] {
+  const words: string[] = [];
+  const options: { key: string; end: number }[] = [];
+  let index = start;
+  while (index < tokens.length && words.length < maxWords) {
+    const token = tokens[index];
+    if (token === undefined) break;
+    if (/^\s+$/.test(token)) {
+      index += 1;
+      continue;
+    }
+    if (!isWord(token)) break;
+    words.push(normalizeToken(token));
+    index += 1;
+    if (words.length >= 2) {
+      options.push({ key: words.join(' '), end: index });
+    }
+  }
+  return options.reverse();
+}
+
 function isWord(token: string): boolean {
   return /^[A-Za-z]+(?:'[A-Za-z]+)?$/.test(token);
 }
@@ -104,19 +129,12 @@ function translateChunk(english: string): string {
     }
 
     let matched = false;
-    const max = Math.min(MAX_PHRASE_WORDS, tokens.length - index);
-    for (let width = max; width >= 2; width -= 1) {
-      const slice = tokens.slice(index, index + width);
-      if (!slice.every((item, sliceIndex) => sliceIndex % 2 === 1 || isWord(item))) {
-        continue;
-      }
-      const words = slice.filter((item) => !/^\s+$/.test(item)).map(normalizeToken);
-      if (words.length < 2) continue;
-      const key = words.join(' ');
-      const phrase = PHRASES[key];
+    const phrases = upcomingPhrases(tokens, index, MAX_PHRASE_WORDS);
+    for (const option of phrases) {
+      const phrase = PHRASES[option.key];
       if (phrase !== undefined) {
         if (phrase) out.push(phrase);
-        index += width;
+        index = option.end;
         matched = true;
         break;
       }

@@ -30,6 +30,8 @@ On a phone:
 npx expo run:android
 ```
 
+Web preview (`npm run web`) can show the bubble-gum UI. Bilibili search is blocked in browsers by CORS, so the web preview uses the on-device catalog. Native Android does the live harvest.
+
 Checks:
 
 ```sh

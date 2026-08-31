@@ -36,7 +36,14 @@ describe('translateToChinese', () => {
     assert.match(chinese, /收藏/);
     assert.match(chinese, /。|！/);
     assert.equal(/#/.test(chinese), false);
-    assert.equal(chinese.startsWith('在家'), true);
+    assert.match(chinese, /先收藏/);
+  });
+
+  it('maps gameplay slang to bilibili-native wording', () => {
+    const chinese = translateToChinese('New gameplay video of this boss fight. Like and subscribe!');
+    assert.match(chinese, /游戏实况/);
+    assert.match(chinese, /Boss战/);
+    assert.match(chinese, /点赞关注/);
   });
 });
 
