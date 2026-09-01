@@ -40,10 +40,11 @@ $ExpectedHash = 'D6F9363454F96A99DCDA9443B6691B21EEFF572FE4A090D137E56969CF8D05A
 $Apk = Join-Path $env:TEMP $FileName
 
 try {
-    .\adb.exe devices
-    $Device = .\adb.exe devices | Where-Object { $_ -match '^\S+\s+device$' } | Select-Object -First 1
-    if (-not $Device) { throw 'No authorized Android phone was found. Unlock it and approve USB debugging.' }
-    $Serial = ($Device -split '\s+')[0]
+    $Devices = @(.\adb.exe devices | Select-Object -Skip 1 | Where-Object { $_ -match '^\S+\s+device$' })
+    if ($Devices.Count -eq 0) { throw 'No authorized Android phone was found. Unlock it and approve USB debugging.' }
+    if ($Devices.Count -gt 1) { throw "Multiple authorized Android phones are connected ($($Devices.Count)). Disconnect all but the intended phone and run this again." }
+    $Serial = ($Devices[0] -split '\s+')[0]
+    if ((.\adb.exe -s $Serial get-state).Trim() -ne 'device') { throw "The detected phone $Serial is not ready." }
 
     Invoke-WebRequest -Uri $Url -OutFile $Apk
     $ActualHash = (Get-FileHash -LiteralPath $Apk -Algorithm SHA256).Hash
