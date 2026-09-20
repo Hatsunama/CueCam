@@ -34,27 +34,38 @@ This installs the published GitHub release directly onto a connected Android pho
 ```powershell
 $ErrorActionPreference = 'Stop'
 $Version = '1.0.14'
+$Package = 'com.thea.cuecam'
 $FileName = "cuecam-$Version-arm64-v8a-release.apk"
 $Url = "https://github.com/Hatsunama/CueCam/releases/download/v$Version/$FileName"
 $ExpectedHash = '0FF6284089C20BD64B7A3C7866623BBC2C1F15A7F938A7E18B080A588DDDDE83'
 $Apk = Join-Path $env:TEMP $FileName
+$Adb = (Get-Command adb.exe -ErrorAction Stop).Source
 
 try {
-    $Devices = @(.\adb.exe devices | Select-Object -Skip 1 | Where-Object { $_ -match '^\S+\s+device$' })
+    $Devices = @(& $Adb devices | Select-Object -Skip 1 | Where-Object { $_ -match '^\S+\s+device$' })
     if ($Devices.Count -eq 0) { throw 'No authorized Android phone was found. Unlock it and approve USB debugging.' }
     if ($Devices.Count -gt 1) { throw "Multiple authorized Android phones are connected ($($Devices.Count)). Disconnect all but the intended phone and run this again." }
     $Serial = ($Devices[0] -split '\s+')[0]
-    if ((.\adb.exe -s $Serial get-state).Trim() -ne 'device') { throw "The detected phone $Serial is not ready." }
+    if ((& $Adb -s $Serial get-state).Trim() -ne 'device') { throw "The detected phone $Serial is not ready." }
 
     Invoke-WebRequest -Uri $Url -OutFile $Apk
     $ActualHash = (Get-FileHash -LiteralPath $Apk -Algorithm SHA256).Hash
     if ($ActualHash -ne $ExpectedHash) { throw 'Checksum mismatch. Installation refused.' }
 
-    .\adb.exe -s $Serial install -r --streaming $Apk
-    .\adb.exe -s $Serial shell pm enable --user 0 com.thea.cuecam | Out-Host
-    .\adb.exe -s $Serial shell am start -W -n com.thea.cuecam/.MainActivity | Out-Host
+    $InstallResult = @(& $Adb -s $Serial install -r --streaming $Apk 2>&1)
+    $InstallExitCode = $LASTEXITCODE
+    $InstallResult | Out-Host
+    $InstallSucceeded = [bool]($InstallResult | Where-Object { "$($_)".Trim() -eq 'Success' })
+    if ($InstallExitCode -ne 0 -or -not $InstallSucceeded) { throw 'CueCam installation failed.' }
+
+    & $Adb -s $Serial shell pm enable --user 0 $Package | Out-Host
+    & $Adb -s $Serial shell am force-stop $Package
+    & $Adb -s $Serial shell am start -W -n "$Package/.MainActivity" | Out-Host
+
+    & $Adb -s $Serial shell dumpsys package $Package |
+        Select-String 'versionName=|versionCode=|targetSdk='
 } finally {
-    if (Test-Path -LiteralPath $Apk) { Remove-Item -LiteralPath $Apk -Force }
+    if (Test-Path -LiteralPath $Apk) { [IO.File]::Delete($Apk) }
 }
 ```
 
