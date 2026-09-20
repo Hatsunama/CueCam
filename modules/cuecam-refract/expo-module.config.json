@@ -1,0 +1,6 @@
+{
+  "platforms": ["android"],
+  "android": {
+    "modules": ["com.thea.cuecam.refract.CueCamRefractModule"]
+  }
+}

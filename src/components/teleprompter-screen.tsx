@@ -29,6 +29,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useCameraRecordingSession } from '@/hooks/use-camera-recording-session';
 import { PrivacyPolicyModal } from '@/components/privacy-policy-modal';
+import { RefractBackground } from '@/components/refract-background';
 import {
   COUNTDOWN_OPTIONS,
   FONT_SIZE_RANGE,
@@ -819,6 +820,7 @@ export function TeleprompterScreen() {
                 ? { top: insets.top + 12, bottom: insets.bottom + 12, right: insets.right + 12 }
                 : { bottom: insets.bottom + 8, left: insets.left + 8, right: insets.right + 8 },
             ]}>
+            <RefractBackground active={setupOpen} style={StyleSheet.absoluteFill} />
             <ScrollView
               contentInsetAdjustmentBehavior="automatic"
               keyboardShouldPersistTaps="handled"
@@ -991,7 +993,7 @@ const styles = StyleSheet.create({
   recordInner: { width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.coral },
   recordInnerStop: { width: 28, height: 28, borderRadius: 7 },
   scrim: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0,0,0,0.5)' },
-  setupPanel: { position: 'absolute', backgroundColor: COLORS.panel, borderRadius: 30, borderWidth: 1, borderColor: '#34362E', overflow: 'hidden', boxShadow: '0 16px 50px rgba(0,0,0,0.55)' },
+  setupPanel: { position: 'absolute', backgroundColor: 'rgba(24,25,22,0.82)', borderRadius: 30, borderWidth: 1, borderColor: '#34362E', overflow: 'hidden', boxShadow: '0 16px 50px rgba(0,0,0,0.55)' },
   setupPanelPortrait: { maxHeight: '88%' },
   setupPanelLandscape: { width: 430 },
   setupContent: { padding: 22, gap: 18 },
