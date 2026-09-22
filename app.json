@@ -2,7 +2,7 @@
   "expo": {
     "name": "CueCam",
     "slug": "cuecam",
-    "version": "1.0.15",
+    "version": "1.0.16",
     "platforms": ["ios", "android"],
     "orientation": "default",
     "icon": "./assets/images/icon.png",
@@ -10,7 +10,7 @@
     "userInterfaceStyle": "dark",
     "ios": {
       "icon": "./assets/images/icon.png",
-      "bundleIdentifier": "com.thea.cuecam",
+      "bundleIdentifier": "com.xmiloatyourside.cuecam",
       "buildNumber": "13",
       "requireFullScreen": true,
       "infoPlist": {
@@ -22,8 +22,8 @@
       }
     },
     "android": {
-      "package": "com.thea.cuecam",
-      "versionCode": 16,
+      "package": "com.xmiloatyourside.cuecam",
+      "versionCode": 17,
       "allowBackup": false,
       "blockedPermissions": [
         "android.permission.ACCESS_NETWORK_STATE",

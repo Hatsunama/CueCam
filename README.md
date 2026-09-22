@@ -6,7 +6,7 @@ CueCam is a phone-first teleprompter and video recorder built with Expo 57 and R
 
 The simplest installation uses only the phone:
 
-1. Tap **[Download CueCam 1.0.15 for Android](https://github.com/Hatsunama/CueCam/releases/download/v1.0.15/cuecam-1.0.15-arm64-v8a-release.apk)** in the phone's web browser.
+1. Tap **[Download CueCam 1.0.16 for Android](https://github.com/Hatsunama/CueCam/releases/download/v1.0.16/cuecam-1.0.16-arm64-v8a-release.apk)** in the phone's web browser.
 2. Open the downloaded APK.
 3. If Android blocks the installation, tap **Settings**, enable **Allow from this source** for the browser, then return to the installer. On Android 7, enable **Unknown sources** under **Settings > Security** instead.
 4. Tap **Install**, then **Open**.
@@ -19,10 +19,10 @@ The downloadable build requires Android 7.0 or newer and a 64-bit ARM (`arm64-v8
 Android warns about apps installed outside Google Play. You can verify this release using its SHA-256 checksum:
 
 ```text
-FD254A3DAABA440F83C4EFDFB829C01A5885E26CD2F74FBBE2131AED956FEBCF
+55AC4556B66CD0194BA1649EB8280818E7BBAFFC2F95320722B91177C593EF1A
 ```
 
-Installing a newer CueCam APK over the existing app normally preserves scripts and settings.
+This release uses the Play Store package ID `com.xmiloatyourside.cuecam`. Android treats a CueCam installation with a different package ID as a separate app. Save any script you need from that installation before removing it; its local script and settings are not automatically transferred.
 
 ## Direct streamed install from GitHub (Windows + USB)
 
@@ -33,11 +33,11 @@ This installs the published GitHub release directly onto a connected Android pho
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$Version = '1.0.15'
-$Package = 'com.thea.cuecam'
+$Version = '1.0.16'
+$Package = 'com.xmiloatyourside.cuecam'
 $FileName = "cuecam-$Version-arm64-v8a-release.apk"
 $Url = "https://github.com/Hatsunama/CueCam/releases/download/v$Version/$FileName"
-$ExpectedHash = 'FD254A3DAABA440F83C4EFDFB829C01A5885E26CD2F74FBBE2131AED956FEBCF'
+$ExpectedHash = '55AC4556B66CD0194BA1649EB8280818E7BBAFFC2F95320722B91177C593EF1A'
 $Apk = Join-Path $env:TEMP $FileName
 $Adb = (Get-Command adb.exe -ErrorAction Stop).Source
 
@@ -69,7 +69,7 @@ try {
 }
 ```
 
-`--streaming` sends the verified GitHub release through ADB without retaining an APK in the project folder. The update uses `-r`, so the existing script and settings remain intact.
+`--streaming` sends the verified GitHub release through ADB without retaining an APK in the project folder. The `-r` option preserves local data only when updating an installation with the same package ID and signing key.
 
 ## Install from a Windows PC
 
@@ -82,11 +82,11 @@ This method is useful when browser installation is unavailable.
 5. Open PowerShell in the extracted `platform-tools` directory and run:
 
 ```powershell
-$Version = '1.0.15'
+$Version = '1.0.16'
 $FileName = "cuecam-$Version-arm64-v8a-release.apk"
 $Apk = Join-Path $env:TEMP $FileName
 $Url = "https://github.com/Hatsunama/CueCam/releases/download/v$Version/$FileName"
-$ExpectedHash = 'FD254A3DAABA440F83C4EFDFB829C01A5885E26CD2F74FBBE2131AED956FEBCF'
+$ExpectedHash = '55AC4556B66CD0194BA1649EB8280818E7BBAFFC2F95320722B91177C593EF1A'
 
 Invoke-WebRequest -Uri $Url -OutFile $Apk
 $ActualHash = (Get-FileHash -LiteralPath $Apk -Algorithm SHA256).Hash
@@ -111,10 +111,10 @@ This method downloads and verifies CueCam from a Termux shell, but Android still
 pkg update
 pkg install curl coreutils
 
-VERSION='1.0.15'
+VERSION='1.0.16'
 FILE="cuecam-$VERSION-arm64-v8a-release.apk"
 URL="https://github.com/Hatsunama/CueCam/releases/download/v$VERSION/$FILE"
-EXPECTED='FD254A3DAABA440F83C4EFDFB829C01A5885E26CD2F74FBBE2131AED956FEBCF'
+EXPECTED='55AC4556B66CD0194BA1649EB8280818E7BBAFFC2F95320722B91177C593EF1A'
 
 curl --fail --location "$URL" --output "$FILE"
 printf '%s  %s\n' "$EXPECTED" "$FILE" | sha256sum --check

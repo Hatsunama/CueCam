@@ -1,4 +1,4 @@
-package com.thea.cuecam.refract
+package com.xmiloatyourside.cuecam.refract
 
 import android.content.Context
 import android.view.View

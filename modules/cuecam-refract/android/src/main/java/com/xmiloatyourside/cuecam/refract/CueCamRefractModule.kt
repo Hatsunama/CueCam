@@ -1,4 +1,4 @@
-package com.thea.cuecam.refract
+package com.xmiloatyourside.cuecam.refract
 
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition

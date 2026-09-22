@@ -42,8 +42,8 @@ function Get-Sha256 {
 }
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$packageName = 'com.thea.cuecam'
 $appConfig = (Get-Content (Join-Path $projectRoot 'app.json') -Raw | ConvertFrom-Json).expo
+$packageName = [string]$appConfig.android.package
 $expectedVersion = [string]$appConfig.version
 $expectedVersionCode = [string]$appConfig.android.versionCode
 $stageRoot = Join-Path "$env:SystemDrive\" "CueCamBuild-$PID"

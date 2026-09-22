@@ -8,8 +8,10 @@ const appConfig = JSON.parse(fs.readFileSync(path.join(root, 'app.json'), 'utf8'
 const packageConfig = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 
 assert.equal(appConfig.version, packageConfig.version);
-assert.equal(appConfig.android.package, 'com.thea.cuecam');
-assert.equal(appConfig.ios.bundleIdentifier, 'com.thea.cuecam');
+assert.equal(appConfig.android.package, 'com.xmiloatyourside.cuecam');
+assert.equal(appConfig.ios.bundleIdentifier, 'com.xmiloatyourside.cuecam');
+const refractConfig = JSON.parse(fs.readFileSync(path.join(root, 'modules', 'cuecam-refract', 'expo-module.config.json'), 'utf8'));
+assert.deepEqual(refractConfig.android.modules, ['com.xmiloatyourside.cuecam.refract.CueCamRefractModule']);
 assert.equal(appConfig.android.allowBackup, false);
 
 const forbiddenPermissions = [
