@@ -934,7 +934,7 @@ export function TeleprompterScreen() {
 
               <Pressable
                 accessibilityLabel="Privacy policy"
-                accessibilityRole="link"
+                accessibilityRole="button"
                 onPress={() => setPrivacyOpen(true)}
                 style={({ pressed }) => [styles.privacyLink, pressed && styles.pressed]}>
                 <Text style={styles.privacyLinkText}>Privacy policy</Text>

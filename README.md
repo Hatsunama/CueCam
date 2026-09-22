@@ -6,7 +6,7 @@ CueCam is a phone-first teleprompter and video recorder built with Expo 57 and R
 
 The simplest installation uses only the phone:
 
-1. Tap **[Download CueCam 1.0.14 for Android](https://github.com/Hatsunama/CueCam/releases/download/v1.0.14/cuecam-1.0.14-arm64-v8a-release.apk)** in the phone's web browser.
+1. Tap **[Download CueCam 1.0.15 for Android](https://github.com/Hatsunama/CueCam/releases/download/v1.0.15/cuecam-1.0.15-arm64-v8a-release.apk)** in the phone's web browser.
 2. Open the downloaded APK.
 3. If Android blocks the installation, tap **Settings**, enable **Allow from this source** for the browser, then return to the installer. On Android 7, enable **Unknown sources** under **Settings > Security** instead.
 4. Tap **Install**, then **Open**.
@@ -19,7 +19,7 @@ The downloadable build requires Android 7.0 or newer and a 64-bit ARM (`arm64-v8
 Android warns about apps installed outside Google Play. You can verify this release using its SHA-256 checksum:
 
 ```text
-0FF6284089C20BD64B7A3C7866623BBC2C1F15A7F938A7E18B080A588DDDDE83
+FD254A3DAABA440F83C4EFDFB829C01A5885E26CD2F74FBBE2131AED956FEBCF
 ```
 
 Installing a newer CueCam APK over the existing app normally preserves scripts and settings.
@@ -33,11 +33,11 @@ This installs the published GitHub release directly onto a connected Android pho
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$Version = '1.0.14'
+$Version = '1.0.15'
 $Package = 'com.thea.cuecam'
 $FileName = "cuecam-$Version-arm64-v8a-release.apk"
 $Url = "https://github.com/Hatsunama/CueCam/releases/download/v$Version/$FileName"
-$ExpectedHash = '0FF6284089C20BD64B7A3C7866623BBC2C1F15A7F938A7E18B080A588DDDDE83'
+$ExpectedHash = 'FD254A3DAABA440F83C4EFDFB829C01A5885E26CD2F74FBBE2131AED956FEBCF'
 $Apk = Join-Path $env:TEMP $FileName
 $Adb = (Get-Command adb.exe -ErrorAction Stop).Source
 
@@ -82,11 +82,11 @@ This method is useful when browser installation is unavailable.
 5. Open PowerShell in the extracted `platform-tools` directory and run:
 
 ```powershell
-$Version = '1.0.14'
+$Version = '1.0.15'
 $FileName = "cuecam-$Version-arm64-v8a-release.apk"
 $Apk = Join-Path $env:TEMP $FileName
 $Url = "https://github.com/Hatsunama/CueCam/releases/download/v$Version/$FileName"
-$ExpectedHash = '0FF6284089C20BD64B7A3C7866623BBC2C1F15A7F938A7E18B080A588DDDDE83'
+$ExpectedHash = 'FD254A3DAABA440F83C4EFDFB829C01A5885E26CD2F74FBBE2131AED956FEBCF'
 
 Invoke-WebRequest -Uri $Url -OutFile $Apk
 $ActualHash = (Get-FileHash -LiteralPath $Apk -Algorithm SHA256).Hash
@@ -111,10 +111,10 @@ This method downloads and verifies CueCam from a Termux shell, but Android still
 pkg update
 pkg install curl coreutils
 
-VERSION='1.0.14'
+VERSION='1.0.15'
 FILE="cuecam-$VERSION-arm64-v8a-release.apk"
 URL="https://github.com/Hatsunama/CueCam/releases/download/v$VERSION/$FILE"
-EXPECTED='0FF6284089C20BD64B7A3C7866623BBC2C1F15A7F938A7E18B080A588DDDDE83'
+EXPECTED='FD254A3DAABA440F83C4EFDFB829C01A5885E26CD2F74FBBE2131AED956FEBCF'
 
 curl --fail --location "$URL" --output "$FILE"
 printf '%s  %s\n' "$EXPECTED" "$FILE" | sha256sum --check
@@ -148,7 +148,7 @@ Flipping cameras during a take continues the CueCam session and saves each camer
 
 CueCam has no accounts, analytics, advertising, or backend service. Scripts and prompt preferences stay in local app storage. Camera and microphone access are used only while recording. Gallery access is requested only when a finished clip needs to be added to the phone's media library. Android cloud backup is disabled so scripts are not copied into device backups.
 
-See [PRIVACY.md](PRIVACY.md) for the full privacy policy.
+The complete privacy policy is available inside CueCam under Privacy.
 
 ## Develop from source
 

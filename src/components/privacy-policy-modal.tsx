@@ -1,7 +1,7 @@
-import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { PRIVACY_POLICY_EFFECTIVE_DATE, PRIVACY_POLICY_SECTIONS, PRIVACY_POLICY_URL } from '@/services/privacy-policy';
+import { PRIVACY_POLICY_EFFECTIVE_DATE, PRIVACY_POLICY_SECTIONS } from '@/services/privacy-policy';
 
 type PrivacyPolicyModalProps = {
   visible: boolean;
@@ -10,14 +10,6 @@ type PrivacyPolicyModalProps = {
 
 export function PrivacyPolicyModal({ visible, onClose }: PrivacyPolicyModalProps) {
   const insets = useSafeAreaInsets();
-
-  const openPublishedPolicy = async () => {
-    try {
-      await Linking.openURL(PRIVACY_POLICY_URL);
-    } catch {
-      Alert.alert('Could not open the privacy policy', PRIVACY_POLICY_URL);
-    }
-  };
 
   return (
     <Modal
@@ -59,19 +51,9 @@ export function PrivacyPolicyModal({ visible, onClose }: PrivacyPolicyModalProps
             {PRIVACY_POLICY_SECTIONS.map((section) => (
               <View key={section.heading} style={styles.section}>
                 <Text style={styles.heading}>{section.heading}</Text>
-                <Text style={styles.body}>{section.body}</Text>
+                <Text selectable style={styles.body}>{section.body}</Text>
               </View>
             ))}
-            <Text style={styles.body}>
-              Questions can be submitted through the CueCam GitHub repository.
-            </Text>
-            <Pressable
-              accessibilityLabel="Open published privacy policy"
-              accessibilityRole="link"
-              onPress={() => void openPublishedPolicy()}
-              style={({ pressed }) => [styles.linkButton, pressed && styles.pressed]}>
-              <Text style={styles.linkText}>Open published policy</Text>
-            </Pressable>
           </ScrollView>
         </View>
       </View>
@@ -94,7 +76,5 @@ const styles = StyleSheet.create({
   section: { gap: 7 },
   heading: { color: '#F8F8F2', fontSize: 18, fontWeight: '800' },
   body: { color: '#D0D1CB', fontSize: 15, lineHeight: 23 },
-  linkButton: { minHeight: 52, borderRadius: 16, backgroundColor: '#E8FF5B', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
-  linkText: { color: '#090A08', fontSize: 15, fontWeight: '900' },
   pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
 });
